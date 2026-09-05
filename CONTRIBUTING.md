@@ -12,7 +12,9 @@
 
 ## 로컬 실행
 
-저장소를 포크하고 클론한 뒤 `GgotgalpiDemo.xcodeproj`를 Xcode에서 엽니다. 외부 의존성이나 환경 변수는 없습니다.
+저장소를 클론한 뒤 `GgotgalpiDemo.xcodeproj`를 Xcode에서 엽니다. 외부 패키지는 없습니다.
+
+실기기 실행은 [docs/COLLABORATION.md](docs/COLLABORATION.md)를 따릅니다. Signing Team과 Bundle Identifier는 커밋된 값을 유지합니다.
 
 제출 전 최소 검증:
 
