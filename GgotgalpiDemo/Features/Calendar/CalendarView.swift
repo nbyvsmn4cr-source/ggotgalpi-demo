@@ -148,8 +148,6 @@ struct CalendarView: View {
                 }
             }
             .scrollIndicators(.hidden)
-            // 달력 카드와 안전 영역을 같은 웜 베이지로 이어 화면 전체가 한 장처럼 보이게 합니다.
-            .background(GgotgalpiTheme.paper)
             .overlay(alignment: .top) {
                 calendarActions
                     // 확장된 캡슐은 이 여백 안의 전체 폭을 사용합니다.
@@ -173,8 +171,8 @@ struct CalendarView: View {
                 }
             }
         }
-        .background(GgotgalpiTheme.paper.ignoresSafeArea())
-        .tint(GgotgalpiTheme.accent)
+        // 책장과 같은 공통 배경을 사용해 안전 영역을 포함한 화면 전체의 색감을 맞춥니다.
+        .paperBackground()
         .onChange(of: searchResetID) {
             closeSearch()
         }
@@ -895,13 +893,8 @@ private struct MonthlyCalendarGrid: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
-            .background(GgotgalpiTheme.paper.opacity(0.72))
+            // 달력 면에는 별도 색을 칠하지 않아 페이지의 흰 배경이 그대로 드러납니다.
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(GgotgalpiTheme.paperDeep.opacity(0.75), lineWidth: 0.8)
-            }
-            .shadow(color: .black.opacity(0.045), radius: 8, y: 3)
         }
         .frame(height: calendarHeight)
         .sheet(isPresented: $isShowingMonthPicker) {
