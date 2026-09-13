@@ -95,7 +95,7 @@ struct MyRecordView: View {
                         NavigationLink {
                             TrashView()
                         } label: {
-                            Image(systemName: "trash.fill")
+                            Image(systemName: "trash")
                                 .foregroundStyle(GgotgalpiTheme.ink)
                                 .frame(width: 28, height: 28)
                         }

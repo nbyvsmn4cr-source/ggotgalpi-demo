@@ -186,7 +186,7 @@ struct BookshelfView: View {
         NavigationLink {
             TrashView()
         } label: {
-            Image(systemName: store.trashedEntries.isEmpty ? "trash" : "trash.fill")
+            Image(systemName: "trash")
                 .font(.body)
                 .foregroundStyle(GgotgalpiTheme.ink)
                 .frame(width: 40, height: 40)
