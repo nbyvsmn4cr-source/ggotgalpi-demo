@@ -350,7 +350,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("꽃갈피") {
+                Section {
                     Picker("정렬", selection: $bookshelfSortOrder) {
                         ForEach(BookshelfSortOption.allCases) { option in
                             Text(option.title).tag(option.rawValue)
@@ -358,10 +358,15 @@ struct SettingsView: View {
                     }
 
                     Toggle("출판사 표시", isOn: $showsPublisher)
+                        .tint(Color(white: 0.28))
                     Toggle("마음에 드는 문장 바로가기", isOn: $showsFavoriteSentences)
+                        .tint(Color(white: 0.28))
+                } header: {
+                    Text("꽃갈피")
+                        .foregroundStyle(.gray)
                 }
 
-                Section("기록 관리") {
+                Section {
                     NavigationLink {
                         TrashView()
                     } label: {
@@ -369,12 +374,22 @@ struct SettingsView: View {
                     }
 
                     LabeledContent("휴지통 보관 기간", value: "30일")
+                } header: {
+                    Text("기록 관리")
+                        .foregroundStyle(.gray)
                 }
 
-                Section("앱 정보") {
+                Section {
                     LabeledContent("버전", value: "0.1")
+                } header: {
+                    Text("앱 정보")
+                        .foregroundStyle(.gray)
                 }
             }
+            .foregroundStyle(.black)
+            .tint(.gray)
+            .listRowBackground(Color.white)
+            .listRowSeparatorTint(.gray.opacity(0.35))
             .scrollContentBackground(.hidden)
             .background(Color.white)
             .safeAreaPadding(.bottom, 64)
