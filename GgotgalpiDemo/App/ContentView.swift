@@ -60,9 +60,7 @@ struct ContentView: View {
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .offset(x: bookshelfOffset(pageWidth: pageWidth))
 
-                    SettingsView {
-                        dismissSettings()
-                    }
+                    SettingsView()
                     .frame(width: proxy.size.width * 4 / 5, height: proxy.size.height)
                     .offset(x: settingsPanelOffset(pageWidth: pageWidth))
                 }
@@ -345,7 +343,6 @@ enum BookshelfSortOption: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
-    let dismiss: () -> Void
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
     @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
     @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
@@ -353,7 +350,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("책장") {
+                Section("꽃갈피") {
                     Picker("정렬", selection: $bookshelfSortOrder) {
                         ForEach(BookshelfSortOption.allCases) { option in
                             Text(option.title).tag(option.rawValue)
@@ -381,13 +378,6 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.white)
             .safeAreaPadding(.bottom, 64)
-            .navigationTitle("설정")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("닫기", action: dismiss)
-                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
-                }
-            }
         }
         .background(Color.white)
     }
