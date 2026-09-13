@@ -8,6 +8,7 @@ struct BookDetailView: View {
     @State private var showingEditBook = false
     @State private var editingEntry: ReadingEntry?
     @State private var showingBookDeletionConfirmation = false
+    @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
 
     private var currentBook: Book {
         store.book(for: book.id) ?? book
@@ -44,7 +45,7 @@ struct BookDetailView: View {
                             Text(currentBook.author)
                                 .font(.subheadline)
                                 .foregroundStyle(GgotgalpiTheme.secondaryInk)
-                            if !currentBook.publisher.isEmpty {
+                            if showsPublisher && !currentBook.publisher.isEmpty {
                                 Text(currentBook.publisher)
                                     .font(.caption)
                                     .foregroundStyle(GgotgalpiTheme.secondaryInk)
@@ -158,6 +159,7 @@ struct DetailStat: View {
 
 struct ReadingEntryRow: View {
     let entry: ReadingEntry
+    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -175,7 +177,7 @@ struct ReadingEntryRow: View {
                 .foregroundStyle(GgotgalpiTheme.secondaryInk)
                 .lineSpacing(3)
 
-            if !entry.favoriteSentence.isEmpty {
+            if showsFavoriteSentences && !entry.favoriteSentence.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "quote.opening")
                         .font(.caption.weight(.semibold))

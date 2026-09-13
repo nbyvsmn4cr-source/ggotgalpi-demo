@@ -12,9 +12,32 @@ struct BookshelfView: View {
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
     @FocusState private var isSearchFieldFocused: Bool
+    @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
+    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
 
     private var visibleBooks: [Book] {
-        store.books.filter(matchesBookshelfFilters)
+        store.books
+            .filter(matchesBookshelfFilters)
+            .sorted(by: sortBooks)
+    }
+
+    private var selectedSortOption: BookshelfSortOption {
+        BookshelfSortOption(rawValue: bookshelfSortOrder) ?? .recentEntry
+    }
+
+    private func sortBooks(_ first: Book, _ second: Book) -> Bool {
+        switch selectedSortOption {
+        case .recentEntry:
+            let firstLatestEntry = store.entries(for: first.id).map(\.createdAt).max() ?? .distantPast
+            let secondLatestEntry = store.entries(for: second.id).map(\.createdAt).max() ?? .distantPast
+            if firstLatestEntry != secondLatestEntry {
+                return firstLatestEntry > secondLatestEntry
+            }
+        case .title:
+            break
+        }
+
+        return first.title.localizedStandardCompare(second.title) == .orderedAscending
     }
 
     private func matchesBookshelfFilters(_ book: Book) -> Bool {
@@ -54,14 +77,16 @@ struct BookshelfView: View {
                         }
 
                         if !hasSearchTerm {
-                            NavigationLink {
-                                FavoriteSentencesView()
-                            } label: {
-                                FavoriteSentencesShortcut(
-                                    sentenceCount: store.entries.filter { !$0.favoriteSentence.isEmpty }.count
-                                )
+                            if showsFavoriteSentences {
+                                NavigationLink {
+                                    FavoriteSentencesView()
+                                } label: {
+                                    FavoriteSentencesShortcut(
+                                        sentenceCount: store.entries.filter { !$0.favoriteSentence.isEmpty }.count
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
 
                             SectionLabel(title: "나의 책장")
 

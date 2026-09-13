@@ -5,9 +5,25 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     private enum Tab: Hashable {
         case calendar, bookshelf
+
+        var index: Int {
+            switch self {
+            case .calendar: 0
+            case .bookshelf: 1
+            }
+        }
+
+        init?(index: Int) {
+            switch index {
+            case 0: self = .calendar
+            case 1: self = .bookshelf
+            default: return nil
+            }
+        }
     }
 
     @State private var selectedTab: Tab = .calendar
+    @State private var isShowingSettings = false
     @State private var interactiveOffset: CGFloat = 0
     @State private var isInteractiveSwipe = false
     @State private var calendarSearchResetID = 0
@@ -43,22 +59,18 @@ struct ContentView: View {
                     )
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .offset(x: bookshelfOffset(pageWidth: pageWidth))
+
+                    SettingsView {
+                        dismissSettings()
+                    }
+                    .frame(width: proxy.size.width * 4 / 5, height: proxy.size.height)
+                    .offset(x: settingsPanelOffset(pageWidth: pageWidth))
                 }
                 .clipped()
                 .overlay(alignment: selectedTab == .calendar ? .trailing : .leading) {
-                    Color.clear
-                        .frame(width: edgeActivationWidth)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 8)
-                                .onChanged { value in
-                                    updateInteractiveSwipe(value, pageWidth: pageWidth)
-                                }
-                                .onEnded { value in
-                                    finishInteractiveSwipe(value, pageWidth: pageWidth)
-                                }
-                        )
+                    if !isShowingSettings {
+                        edgeSwipeArea(pageWidth: pageWidth)
+                    }
                 }
             }
         }
@@ -80,16 +92,16 @@ struct ContentView: View {
 
     /// 화면 가장자리의 전용 영역에서 시작한 명확한 가로 드래그에만 반응해, 세로 스크롤과 충돌하지 않게 합니다.
     private func updateInteractiveSwipe(_ value: DragGesture.Value, pageWidth: CGFloat) {
+        guard !isShowingSettings else { return }
+
         let horizontalDistance = value.translation.width
         let verticalDistance = value.translation.height
 
         guard abs(horizontalDistance) > abs(verticalDistance) else { return }
 
         if !isInteractiveSwipe {
-            let isAllowedDirection = switch selectedTab {
-            case .calendar: horizontalDistance < 0
-            case .bookshelf: horizontalDistance > 0
-            }
+            let isAllowedDirection = (horizontalDistance < 0 && selectedTab == .calendar)
+                || (horizontalDistance > 0 && selectedTab == .bookshelf)
 
             guard isAllowedDirection else {
                 return
@@ -124,11 +136,37 @@ struct ContentView: View {
     }
 
     private func calendarOffset(pageWidth: CGFloat) -> CGFloat {
-        selectedTab == .calendar ? interactiveOffset : -pageWidth + interactiveOffset
+        pageOffset(for: .calendar, pageWidth: pageWidth)
     }
 
     private func bookshelfOffset(pageWidth: CGFloat) -> CGFloat {
-        selectedTab == .bookshelf ? interactiveOffset : pageWidth + interactiveOffset
+        pageOffset(for: .bookshelf, pageWidth: pageWidth)
+    }
+
+    private func pageOffset(for tab: Tab, pageWidth: CGFloat) -> CGFloat {
+        CGFloat(tab.index - selectedTab.index) * pageWidth
+            + interactiveOffset
+            + (isShowingSettings && tab == selectedTab ? -(pageWidth * 4 / 5) : 0)
+    }
+
+    private func settingsPanelOffset(pageWidth: CGFloat) -> CGFloat {
+        isShowingSettings ? pageWidth / 10 : pageWidth * 9 / 10
+    }
+
+    private func edgeSwipeArea(pageWidth: CGFloat) -> some View {
+        Color.clear
+            .frame(width: edgeActivationWidth)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        updateInteractiveSwipe(value, pageWidth: pageWidth)
+                    }
+                    .onEnded { value in
+                        finishInteractiveSwipe(value, pageWidth: pageWidth)
+                    }
+            )
     }
 
     private var tabDock: some View {
@@ -146,7 +184,7 @@ struct ContentView: View {
                     Capsule()
                         .fill(.clear)
                         .glassEffect(.clear, in: Capsule())
-                        .frame(width: 152, height: 44)
+                        .frame(width: 228, height: 44)
                         .allowsHitTesting(false)
                 }
 
@@ -158,7 +196,7 @@ struct ContentView: View {
                 // 글라스 합성과 분리해 아이콘·글자가 굴절되거나 흐려지지 않게 합니다.
                 tabDockContents
             }
-            .frame(width: 152, height: 44)
+            .frame(width: 228, height: 44)
         } else {
             tabDockContents
                 .background(.ultraThinMaterial, in: Capsule())
@@ -169,8 +207,9 @@ struct ContentView: View {
         HStack(spacing: 0) {
             dockTabButton(title: "달력", symbol: "calendar", tab: .calendar)
             dockTabButton(title: "책장", symbol: "books.vertical", tab: .bookshelf)
+            settingsDockButton
         }
-        .frame(width: 152, height: 44)
+        .frame(width: 228, height: 44)
     }
 
     @ViewBuilder
@@ -179,8 +218,9 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 dockSelectionSlot(for: .calendar)
                 dockSelectionSlot(for: .bookshelf)
+                dockSelectionSlot(isSelected: isShowingSettings)
             }
-            .frame(width: 152, height: 44)
+            .frame(width: 228, height: 44)
             .allowsHitTesting(false)
         }
     }
@@ -188,7 +228,13 @@ struct ContentView: View {
     @ViewBuilder
     @available(iOS 26.0, *)
     private func dockSelectionSlot(for tab: Tab) -> some View {
-        if selectedTab == tab {
+        dockSelectionSlot(isSelected: selectedTab == tab && !isShowingSettings)
+    }
+
+    @ViewBuilder
+    @available(iOS 26.0, *)
+    private func dockSelectionSlot(isSelected: Bool) -> some View {
+        if isSelected {
             Capsule()
                 .fill(.clear)
                 .glassEffect(.clear, in: Capsule())
@@ -206,12 +252,27 @@ struct ContentView: View {
         Button {
             activateTab(tab)
         } label: {
-            tabPickerLabel(title: title, symbol: symbol, isSelected: selectedTab == tab)
+            tabPickerLabel(title: title, symbol: symbol, isSelected: selectedTab == tab && !isShowingSettings)
                 .frame(width: 76, height: 44)
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+    }
+
+    private var settingsDockButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.32)) {
+                isShowingSettings.toggle()
+                interactiveOffset = 0
+            }
+        } label: {
+            tabPickerLabel(title: "설정", symbol: "gearshape", isSelected: isShowingSettings)
+                .frame(width: 76, height: 44)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isShowingSettings ? "설정 닫기" : "설정")
     }
 
     private func tabPickerLabel(title: String, symbol: String, isSelected: Bool) -> some View {
@@ -227,6 +288,19 @@ struct ContentView: View {
 
     /// 투명 글라스 선택 캡슐을 다른 탭으로 부드럽게 이동시킵니다.
     private func activateTab(_ tab: Tab) {
+        if isShowingSettings {
+            if tab == .calendar, selectedTab != .calendar {
+                calendarPastHighlightRefreshID += 1
+            }
+
+            withAnimation(.easeInOut(duration: 0.32)) {
+                isShowingSettings = false
+                selectedTab = tab
+                interactiveOffset = 0
+            }
+            return
+        }
+
         guard selectedTab != tab else {
             switch tab {
             case .calendar:
@@ -247,5 +321,74 @@ struct ContentView: View {
             selectedTab = tab
             interactiveOffset = 0
         }
+    }
+
+    private func dismissSettings() {
+        withAnimation(.easeInOut(duration: 0.32)) {
+            isShowingSettings = false
+        }
+    }
+}
+
+enum BookshelfSortOption: String, CaseIterable, Identifiable {
+    case recentEntry
+    case title
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recentEntry: "최근 기록순"
+        case .title: "제목순"
+        }
+    }
+}
+
+struct SettingsView: View {
+    let dismiss: () -> Void
+    @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
+    @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
+    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("책장") {
+                    Picker("정렬", selection: $bookshelfSortOrder) {
+                        ForEach(BookshelfSortOption.allCases) { option in
+                            Text(option.title).tag(option.rawValue)
+                        }
+                    }
+
+                    Toggle("출판사 표시", isOn: $showsPublisher)
+                    Toggle("마음에 드는 문장 바로가기", isOn: $showsFavoriteSentences)
+                }
+
+                Section("기록 관리") {
+                    NavigationLink {
+                        TrashView()
+                    } label: {
+                        Label("휴지통", systemImage: "trash")
+                    }
+
+                    LabeledContent("휴지통 보관 기간", value: "30일")
+                }
+
+                Section("앱 정보") {
+                    LabeledContent("버전", value: "0.1")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.white)
+            .safeAreaPadding(.bottom, 64)
+            .navigationTitle("설정")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("닫기", action: dismiss)
+                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                }
+            }
+        }
+        .background(Color.white)
     }
 }
