@@ -24,6 +24,7 @@ struct ContentView: View {
 
     @State private var selectedTab: Tab = .calendar
     @State private var isShowingSettings = false
+    @State private var isShowingSettingsDetail = false
     @State private var interactiveOffset: CGFloat = 0
     @State private var isInteractiveSwipe = false
     @State private var calendarSearchResetID = 0
@@ -60,17 +61,46 @@ struct ContentView: View {
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .offset(x: bookshelfOffset(pageWidth: pageWidth))
 
-                    SettingsView()
-                    .frame(width: proxy.size.width * 4 / 5, height: proxy.size.height)
+                    SettingsView(
+                        isShowingDetail: $isShowingSettingsDetail,
+                        panelWidth: isShowingSettingsDetail ? proxy.size.width : proxy.size.width * 4 / 5
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
                     .overlay(alignment: .leading) {
                         Rectangle()
-                            .fill(.gray.opacity(0.5))
+                            .fill(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .gray.opacity(0), location: 0),
+                                        .init(color: .gray.opacity(0.5), location: 0.16),
+                                        .init(color: .gray.opacity(0.5), location: 0.84),
+                                        .init(color: .gray.opacity(0), location: 1)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                             .frame(width: 1)
+                            .shadow(color: .black.opacity(0.14), radius: 10, x: -4)
+                            .offset(x: proxy.size.width / 5)
+                            .opacity(isShowingSettingsDetail ? 0 : 1)
                     }
-                    .shadow(color: .black.opacity(0.14), radius: 10, x: -4)
                     .offset(x: settingsPanelOffset(pageWidth: pageWidth))
+                    .animation(.easeInOut(duration: 0.28), value: isShowingSettingsDetail)
+                    .animation(.easeInOut(duration: 0.32), value: isShowingSettings)
                 }
                 .clipped()
+                .overlay(alignment: .leading) {
+                    if isShowingSettings && !isShowingSettingsDetail {
+                        Color.clear
+                            .frame(width: pageWidth / 5)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                dismissSettings()
+                            }
+                    }
+                }
                 .overlay(alignment: selectedTab == .calendar ? .trailing : .leading) {
                     if !isShowingSettings {
                         edgeSwipeArea(pageWidth: pageWidth)
@@ -81,7 +111,9 @@ struct ContentView: View {
         // 화면 배경은 기기 가장자리까지 확장하되, 키보드가 나타날 때는 안전 영역을 존중합니다.
         .ignoresSafeArea(.container)
         .overlay(alignment: .bottom) {
-            tabDock
+            if !isShowingSettingsDetail {
+                tabDock
+            }
         }
         .tint(GgotgalpiTheme.accent)
         .onChange(of: scenePhase) { _, newPhase in
@@ -154,7 +186,7 @@ struct ContentView: View {
     }
 
     private func settingsPanelOffset(pageWidth: CGFloat) -> CGFloat {
-        isShowingSettings ? pageWidth / 10 : pageWidth * 9 / 10
+        isShowingSettings ? 0 : pageWidth * 1.3
     }
 
     private func edgeSwipeArea(pageWidth: CGFloat) -> some View {
@@ -267,6 +299,9 @@ struct ContentView: View {
     private var settingsDockButton: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.32)) {
+                if isShowingSettings {
+                    isShowingSettingsDetail = false
+                }
                 isShowingSettings.toggle()
                 interactiveOffset = 0
             }
@@ -299,6 +334,7 @@ struct ContentView: View {
 
             withAnimation(.easeInOut(duration: 0.32)) {
                 isShowingSettings = false
+                isShowingSettingsDetail = false
                 selectedTab = tab
                 interactiveOffset = 0
             }
@@ -330,6 +366,7 @@ struct ContentView: View {
     private func dismissSettings() {
         withAnimation(.easeInOut(duration: 0.32)) {
             isShowingSettings = false
+            isShowingSettingsDetail = false
         }
     }
 }
@@ -349,9 +386,12 @@ enum BookshelfSortOption: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+    @Binding var isShowingDetail: Bool
+    let panelWidth: CGFloat
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
     @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
     @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
+    @State private var isShowingTrash = false
 
     var body: some View {
         NavigationStack {
@@ -373,11 +413,18 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink {
-                        TrashView()
-                    } label: {
-                        Label("휴지통", systemImage: "trash")
+                    Button(action: openTrash) {
+                        HStack {
+                            Label("휴지통", systemImage: "trash")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
 
                     LabeledContent("휴지통 보관 기간", value: "30일")
                 } header: {
@@ -399,7 +446,33 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Color.white)
             .safeAreaPadding(.bottom, 64)
+            .frame(width: panelWidth)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .navigationDestination(isPresented: $isShowingTrash) {
+                TrashView()
+            }
+            .onChange(of: isShowingTrash) { _, isTrashPresented in
+                guard !isTrashPresented else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    guard !self.isShowingTrash else { return }
+                    withAnimation(.easeInOut(duration: 0.28)) {
+                        isShowingDetail = false
+                    }
+                }
+            }
         }
-        .background(Color.white)
+        .background(Color.clear)
+    }
+
+    private func openTrash() {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            isShowingDetail = true
+        }
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isShowingTrash = true
+        }
     }
 }
