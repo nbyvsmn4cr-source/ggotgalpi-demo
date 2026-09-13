@@ -174,9 +174,26 @@ struct BookshelfView: View {
 
     private var bookshelfActionIcons: some View {
         HStack(spacing: GgotgalpiTheme.Spacing.compact) {
+            if !store.trashedEntries.isEmpty {
+                bookshelfTrashButton
+            }
             bookshelfFilterButton
             bookshelfSearchButton
         }
+    }
+
+    private var bookshelfTrashButton: some View {
+        NavigationLink {
+            TrashView()
+        } label: {
+            Image(systemName: store.trashedEntries.isEmpty ? "trash" : "trash.fill")
+                .font(.body)
+                .foregroundStyle(GgotgalpiTheme.ink)
+                .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("휴지통")
+        .accessibilityValue(store.trashedEntries.isEmpty ? "비어 있음" : "\(store.trashedEntries.count)개")
     }
 
     private var bookshelfFilterButton: some View {

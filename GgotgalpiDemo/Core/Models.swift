@@ -84,6 +84,7 @@ final class ReadingEntry {
     var note: String
     var favoriteSentence: String
     var readingRound: Int
+    var deletedAt: Date?
     var book: Book?
 
     init(
@@ -95,7 +96,8 @@ final class ReadingEntry {
         pageTo: Int,
         note: String,
         favoriteSentence: String = "",
-        readingRound: Int
+        readingRound: Int,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.bookID = book.id
@@ -107,13 +109,17 @@ final class ReadingEntry {
         self.note = note
         self.favoriteSentence = favoriteSentence
         self.readingRound = readingRound
+        self.deletedAt = deletedAt
     }
 }
 
 @MainActor
 final class DemoStore: ObservableObject {
+    static let trashRetentionDays = 30
+
     @Published private(set) var books: [Book] = []
     @Published private(set) var entries: [ReadingEntry] = []
+    @Published private(set) var trashedEntries: [ReadingEntry] = []
     @Published private var calendarBookOrders: [String: [UUID]] = [:]
 
     private let modelContext: ModelContext
@@ -123,6 +129,7 @@ final class DemoStore: ObservableObject {
         self.modelContext = modelContext
         loadCalendarBookOrders()
         refresh()
+        purgeExpiredEntries()
 
         if books.isEmpty {
             seedSampleData()
@@ -199,10 +206,70 @@ final class DemoStore: ObservableObject {
         saveChanges()
     }
 
-    func deleteEntry(id: UUID) {
+    func moveEntryToTrash(id: UUID) {
         guard let entry = entries.first(where: { $0.id == id }) else { return }
+        entry.deletedAt = Date()
+        saveChanges()
+    }
+
+    func restoreEntry(id: UUID) {
+        guard let entry = trashedEntries.first(where: { $0.id == id }) else { return }
+        entry.deletedAt = nil
+        saveChanges()
+    }
+
+    func permanentlyDeleteEntry(id: UUID) {
+        guard let entry = trashedEntries.first(where: { $0.id == id }) else { return }
         modelContext.delete(entry)
         saveChanges()
+    }
+
+    @discardableResult
+    func purgeExpiredEntries(referenceDate: Date = Date()) -> Int {
+        let calendar = Calendar.current
+        guard let expirationThreshold = calendar.date(
+            byAdding: .day,
+            value: -Self.trashRetentionDays,
+            to: referenceDate
+        ) else { return 0 }
+
+        do {
+            let allEntries = try modelContext.fetch(FetchDescriptor<ReadingEntry>())
+            let expiredEntries = allEntries.filter { entry in
+                guard let deletedAt = entry.deletedAt else { return false }
+                return deletedAt <= expirationThreshold
+            }
+
+            guard !expiredEntries.isEmpty else { return 0 }
+            expiredEntries.forEach(modelContext.delete)
+            try modelContext.save()
+            refresh()
+            return expiredEntries.count
+        } catch {
+            assertionFailure("만료된 휴지통 기록을 삭제하지 못했습니다: \(error.localizedDescription)")
+            return 0
+        }
+    }
+
+    func permanentDeletionDate(for entry: ReadingEntry) -> Date? {
+        guard let deletedAt = entry.deletedAt else { return nil }
+        return Calendar.current.date(
+            byAdding: .day,
+            value: Self.trashRetentionDays,
+            to: deletedAt
+        )
+    }
+
+    func daysUntilPermanentDeletion(for entry: ReadingEntry, referenceDate: Date = Date()) -> Int {
+        guard let permanentDeletionDate = permanentDeletionDate(for: entry) else { return 0 }
+        return max(
+            0,
+            Calendar.current.dateComponents(
+                [.day],
+                from: referenceDate,
+                to: permanentDeletionDate
+            ).day ?? 0
+        )
     }
 
     func markBookAsFinished(id: UUID) {
@@ -255,11 +322,16 @@ final class DemoStore: ObservableObject {
     private func refresh() {
         do {
             books = try modelContext.fetch(FetchDescriptor<Book>())
-            entries = try modelContext.fetch(FetchDescriptor<ReadingEntry>())
+            let allEntries = try modelContext.fetch(FetchDescriptor<ReadingEntry>())
+            entries = allEntries.filter { $0.deletedAt == nil }
+            trashedEntries = allEntries
+                .filter { $0.deletedAt != nil }
+                .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
         } catch {
             assertionFailure("SwiftData 데이터를 불러오지 못했습니다: \(error.localizedDescription)")
             books = []
             entries = []
+            trashedEntries = []
         }
     }
 
@@ -347,6 +419,18 @@ extension Date {
                 .year()
                 .month()
                 .day()
+                .locale(Locale(identifier: "ko_KR"))
+        )
+    }
+
+    var koreanDateTime: String {
+        formatted(
+            .dateTime
+                .year()
+                .month()
+                .day()
+                .hour()
+                .minute()
                 .locale(Locale(identifier: "ko_KR"))
         )
     }

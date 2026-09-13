@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var store: DemoStore
+    @Environment(\.scenePhase) private var scenePhase
     private enum Tab: Hashable {
         case calendar, bookshelf
     }
@@ -66,6 +68,10 @@ struct ContentView: View {
             tabDock
         }
         .tint(GgotgalpiTheme.accent)
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            store.purgeExpiredEntries()
+        }
     }
 
     private var screenBackground: Color {

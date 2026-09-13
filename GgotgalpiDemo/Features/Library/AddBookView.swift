@@ -267,7 +267,7 @@ struct AddReadingEntryView: View {
 
                     if editingEntry != nil {
                         ToolbarItem(placement: .bottomBar) {
-                            Button("기록 삭제", role: .destructive) {
+                            Button("휴지통으로 이동", role: .destructive) {
                                 showingEntryDeletionConfirmation = true
                             }
                         }
@@ -277,16 +277,16 @@ struct AddReadingEntryView: View {
         }
         .presentationDetents([.large])
         .paperBackground()
-        .alert("감상 기록을 삭제할까요?", isPresented: $showingEntryDeletionConfirmation) {
-            Button("삭제", role: .destructive) {
+        .alert("감상 기록을 휴지통으로 이동할까요?", isPresented: $showingEntryDeletionConfirmation) {
+            Button("휴지통으로 이동", role: .destructive) {
                 if let editingEntry {
-                    store.deleteEntry(id: editingEntry.id)
+                    store.moveEntryToTrash(id: editingEntry.id)
                 }
                 dismiss()
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("삭제한 기록은 되돌릴 수 없습니다.")
+            Text("30일 동안 휴지통에 보관되며, 이후 자동으로 영구 삭제됩니다.")
         }
         .onAppear {
             guard
