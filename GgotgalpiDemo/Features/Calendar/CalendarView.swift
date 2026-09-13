@@ -11,7 +11,7 @@ struct CalendarView: View {
     @State private var selectedCategory: BookCategory = .all
     @State private var isShowingFilters = false
     @State private var reorderRequest: CalendarBookReorderRequest?
-    @State private var isShowingDayEntries = false
+    @State private var dayEntriesRequest: CalendarDayEntriesRequest?
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
     @FocusState private var isSearchFieldFocused: Bool
@@ -112,8 +112,9 @@ struct CalendarView: View {
                                 selectedDate: $selectedDate,
                                 books: { books(on: $0) },
                                 selectDate: { date in
-                                    selectedDate = date
-                                    isShowingDayEntries = true
+                                    let selectedDay = Calendar.current.startOfDay(for: date)
+                                    selectedDate = selectedDay
+                                    dayEntriesRequest = CalendarDayEntriesRequest(date: selectedDay)
                                 },
                                 requestReorder: { date in
                                     let books = books(on: date)
@@ -188,13 +189,13 @@ struct CalendarView: View {
             )
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $isShowingDayEntries) {
+        .sheet(item: $dayEntriesRequest) { request in
             CalendarDayEntriesSheet(
-                date: selectedDate,
-                entries: entries(on: selectedDate),
-                orderedBooks: books(on: selectedDate),
+                date: request.date,
+                entries: entries(on: request.date),
+                orderedBooks: books(on: request.date),
                 saveOrder: { bookIDs in
-                    store.saveCalendarBookOrder(bookIDs, for: selectedDate)
+                    store.saveCalendarBookOrder(bookIDs, for: request.date)
                 }
             )
         }
@@ -579,6 +580,12 @@ private struct CalendarFilterSheet: View {
 private struct CalendarBookReorderRequest: Identifiable {
     let date: Date
     let books: [Book]
+
+    var id: Date { date }
+}
+
+private struct CalendarDayEntriesRequest: Identifiable {
+    let date: Date
 
     var id: Date { date }
 }
