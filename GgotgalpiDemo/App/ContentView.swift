@@ -62,6 +62,12 @@ struct ContentView: View {
 
                     SettingsView()
                     .frame(width: proxy.size.width * 4 / 5, height: proxy.size.height)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(.gray.opacity(0.5))
+                            .frame(width: 1)
+                    }
+                    .shadow(color: .black.opacity(0.14), radius: 10, x: -4)
                     .offset(x: settingsPanelOffset(pageWidth: pageWidth))
                 }
                 .clipped()
