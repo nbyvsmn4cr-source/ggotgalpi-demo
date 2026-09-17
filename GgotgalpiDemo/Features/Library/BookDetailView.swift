@@ -177,6 +177,19 @@ struct ReadingEntryRow: View {
                 .foregroundStyle(GgotgalpiTheme.secondaryInk)
                 .lineSpacing(3)
 
+            if entry.ratingValue > 0 {
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { value in
+                        Image(systemName: ReadingRating.symbol(for: entry.ratingValue, at: value))
+                            .font(.caption)
+                            .foregroundStyle(entry.ratingValue > Double(value - 1) ? GgotgalpiTheme.accent : GgotgalpiTheme.line)
+                    }
+                }
+                .environment(\.layoutDirection, .leftToRight)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("별점 \(ReadingRating.label(for: entry.ratingValue))")
+            }
+
             if showsFavoriteSentences && !entry.favoriteSentence.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "quote.opening")

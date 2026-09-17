@@ -138,6 +138,7 @@ struct AddReadingEntryView: View {
     @State private var note = ""
     @State private var favoriteSentence = ""
     @State private var readingRound = 0
+    @State private var rating = 0.0
     @State private var hasFinishedReadingRound = false
     @State private var hasInitializedValues = false
     @State private var showingEntryDeletionConfirmation = false
@@ -160,6 +161,14 @@ struct AddReadingEntryView: View {
                     Section {
                         DatePicker("읽은 날짜", selection: $date, displayedComponents: .date)
                         Stepper("\(readingRound)회독", value: $readingRound, in: 0...99)
+                    }
+
+                    Section {
+                        StarRatingPicker(rating: $rating)
+                    } header: {
+                        Text("별점")
+                    } footer: {
+                        Text("별의 왼쪽은 반점, 오른쪽은 정수 점수입니다. 선택한 점수를 다시 누르면 해제됩니다.")
                     }
 
                     Section("읽은 구간") {
@@ -244,7 +253,8 @@ struct AddReadingEntryView: View {
                                     pageTo: Int(pageTo) ?? 0,
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
-                                    readingRound: readingRound
+                                    readingRound: readingRound,
+                                    rating: rating
                                 )
                             } else {
                                 store.addEntry(
@@ -254,7 +264,8 @@ struct AddReadingEntryView: View {
                                     pageTo: Int(pageTo) ?? 0,
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
-                                    readingRound: readingRound
+                                    readingRound: readingRound,
+                                    rating: rating
                                 )
                             }
 
@@ -301,6 +312,7 @@ struct AddReadingEntryView: View {
                 note = editingEntry.note
                 favoriteSentence = editingEntry.favoriteSentence
                 readingRound = editingEntry.readingRound
+                rating = editingEntry.ratingValue
                 hasFinishedReadingRound = book.readingStatus == .finished
             } else if book.readingStatus == .reading, let mostRecentPage {
                 pageFrom = String(mostRecentPage)
@@ -325,5 +337,46 @@ struct AddReadingEntryView: View {
                 proxy.scrollTo(field, anchor: .center)
             }
         }
+    }
+}
+
+private struct StarRatingPicker: View {
+    @Binding var rating: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(1...5, id: \.self) { value in
+                    Image(systemName: ReadingRating.symbol(for: rating, at: value))
+                        .font(.title3)
+                        .foregroundStyle(rating > Double(value - 1) ? GgotgalpiTheme.accent : GgotgalpiTheme.line)
+                        .frame(width: 36, height: 44)
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            let selectedValue = Double(value) - (location.x < 18 ? 0.5 : 0)
+                            rating = rating == selectedValue ? 0 : selectedValue
+                        }
+                }
+            }
+            .environment(\.layoutDirection, .leftToRight)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("별점")
+            .accessibilityValue(ReadingRating.label(for: rating))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: rating = min(5, rating + 0.5)
+                case .decrement: rating = max(0, rating - 0.5)
+                @unknown default: break
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Text(ReadingRating.label(for: rating))
+                .font(.subheadline)
+                .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .contain)
     }
 }

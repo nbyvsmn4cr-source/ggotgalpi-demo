@@ -84,8 +84,20 @@ final class ReadingEntry {
     var note: String
     var favoriteSentence: String
     var readingRound: Int
+    // 기존 정수 별점 필드는 유지해 저장된 기록을 그대로 읽습니다.
+    var rating: Int = 0
+    var hasHalfStar: Bool = false
     var deletedAt: Date?
     var book: Book?
+
+    var ratingValue: Double {
+        get { Double(rating) + (hasHalfStar ? 0.5 : 0) }
+        set {
+            let value = ReadingRating.normalized(newValue)
+            rating = Int(value)
+            hasHalfStar = value != Double(rating)
+        }
+    }
 
     init(
         id: UUID = UUID(),
@@ -97,6 +109,7 @@ final class ReadingEntry {
         note: String,
         favoriteSentence: String = "",
         readingRound: Int,
+        rating: Double = 0,
         deletedAt: Date? = nil
     ) {
         self.id = id
@@ -110,6 +123,25 @@ final class ReadingEntry {
         self.favoriteSentence = favoriteSentence
         self.readingRound = readingRound
         self.deletedAt = deletedAt
+        self.ratingValue = rating
+    }
+}
+
+enum ReadingRating {
+    /// 0은 미선택, 선택한 별점은 0.5~5점 사이의 0.5점 단위입니다.
+    static func normalized(_ value: Double) -> Double {
+        guard value.isFinite, value > 0 else { return 0 }
+        return (min(5, max(0.5, value)) * 2).rounded() / 2
+    }
+
+    static func label(for value: Double) -> String {
+        value == 0 ? "선택 안 함" : "\(value.formatted(.number.precision(.fractionLength(0...1))))점"
+    }
+
+    static func symbol(for value: Double, at position: Int) -> String {
+        if value >= Double(position) { return "star.fill" }
+        if value >= Double(position) - 0.5 { return "star.leadinghalf.filled" }
+        return "star"
     }
 }
 
@@ -176,7 +208,8 @@ final class DemoStore: ObservableObject {
         pageTo: Int,
         note: String,
         favoriteSentence: String = "",
-        readingRound: Int
+        readingRound: Int,
+        rating: Double = 0
     ) {
         guard let book = book(for: bookID) else { return }
         modelContext.insert(
@@ -187,7 +220,8 @@ final class DemoStore: ObservableObject {
                 pageTo: pageTo,
                 note: note,
                 favoriteSentence: favoriteSentence,
-                readingRound: readingRound
+                readingRound: readingRound,
+                rating: rating
             )
         )
         saveChanges()
@@ -200,7 +234,8 @@ final class DemoStore: ObservableObject {
         pageTo: Int,
         note: String,
         favoriteSentence: String = "",
-        readingRound: Int
+        readingRound: Int,
+        rating: Double = 0
     ) {
         guard let entry = entries.first(where: { $0.id == id }) else { return }
         entry.date = date
@@ -209,6 +244,7 @@ final class DemoStore: ObservableObject {
         entry.note = note
         entry.favoriteSentence = favoriteSentence
         entry.readingRound = readingRound
+        entry.ratingValue = rating
         saveChanges()
     }
 
