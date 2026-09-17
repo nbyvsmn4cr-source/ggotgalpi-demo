@@ -115,7 +115,13 @@ final class ReadingEntry {
 
 @MainActor
 final class DemoStore: ObservableObject {
-    static let trashRetentionDays = 30
+    static let trashRetentionDaysKey = "ggotgalpi.settings.trash-retention-days"
+    static let defaultTrashRetentionDays = 30
+
+    static var trashRetentionDays: Int {
+        let selectedDays = UserDefaults.standard.integer(forKey: trashRetentionDaysKey)
+        return [7, 14, 30].contains(selectedDays) ? selectedDays : defaultTrashRetentionDays
+    }
 
     @Published private(set) var books: [Book] = []
     @Published private(set) var entries: [ReadingEntry] = []

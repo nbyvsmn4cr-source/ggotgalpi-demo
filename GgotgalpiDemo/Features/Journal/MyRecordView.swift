@@ -3,6 +3,7 @@ import SwiftUI
 struct MyRecordView: View {
     @EnvironmentObject private var store: DemoStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var entryPendingDeletionID: UUID?
     @State private var showingEntryDeletionConfirmation = false
 
@@ -112,7 +113,7 @@ struct MyRecordView: View {
                 }
                 Button("취소", role: .cancel) {}
             } message: {
-                Text("30일 동안 휴지통에 보관되며, 이후 자동으로 영구 삭제됩니다.")
+                Text("\(trashRetentionDays)일 동안 휴지통에 보관되며, 이후 자동으로 영구 삭제됩니다.")
             }
         }
         .paperBackground()
@@ -131,13 +132,14 @@ struct MyRecordView: View {
 
 struct TrashView: View {
     @EnvironmentObject private var store: DemoStore
+    @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var entryPendingPermanentDeletionID: UUID?
     @State private var showingPermanentDeletionConfirmation = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.section) {
-                Text("휴지통의 감상 기록은 이동한 날부터 30일 동안 보관됩니다. 이후 자동으로 영구 삭제됩니다.")
+                Text("휴지통의 감상 기록은 이동한 날부터 \(trashRetentionDays)일 동안 보관됩니다. 이후 자동으로 영구 삭제됩니다.")
                     .font(.subheadline)
                     .foregroundStyle(GgotgalpiTheme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,7 +147,7 @@ struct TrashView: View {
                 if store.trashedEntries.isEmpty {
                     ReadingEmptyState(
                         title: "휴지통이 비어 있어요",
-                        message: "삭제한 감상 기록이 이곳에 30일 동안 보관됩니다."
+                        message: "삭제한 감상 기록이 이곳에 \(trashRetentionDays)일 동안 보관됩니다."
                     )
                 } else {
                     LazyVStack(spacing: 0) {

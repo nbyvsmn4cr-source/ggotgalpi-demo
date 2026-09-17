@@ -391,7 +391,9 @@ struct SettingsView: View {
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
     @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
     @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
+    @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var isShowingTrash = false
+    @State private var showingTrashRetentionOptions = false
 
     var body: some View {
         NavigationStack {
@@ -426,7 +428,14 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
 
-                    LabeledContent("휴지통 보관 기간", value: "30일")
+                    Button {
+                        showingTrashRetentionOptions = true
+                    } label: {
+                        LabeledContent("휴지통 보관 기간", value: "\(trashRetentionDays)일")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 } header: {
                     Text("기록 관리")
                         .foregroundStyle(.gray)
@@ -450,6 +459,16 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .navigationDestination(isPresented: $isShowingTrash) {
                 TrashView()
+            }
+            .confirmationDialog("휴지통 보관 기간", isPresented: $showingTrashRetentionOptions, titleVisibility: .visible) {
+                ForEach([7, 14, 30], id: \.self) { days in
+                    Button("\(days)일") {
+                        trashRetentionDays = days
+                    }
+                }
+                Button("취소", role: .destructive) {}
+            } message: {
+                Text("삭제한 감상 기록은 선택한 기간이 지나면 자동으로 영구 삭제됩니다.")
             }
             .onChange(of: isShowingTrash) { _, isTrashPresented in
                 guard !isTrashPresented else { return }
