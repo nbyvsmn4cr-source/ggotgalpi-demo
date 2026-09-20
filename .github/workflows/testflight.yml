@@ -1,0 +1,50 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      changelog:
+        description: TestFlight 내부 노트
+        required: false
+        default: 내부 테스트 빌드
+
+permissions:
+  contents: read
+
+jobs:
+  testflight:
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+      BUILD_NUMBER: ${{ github.run_number }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify signing secrets
+        run: |
+          missing=0
+          for name in APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Missing GitHub secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Add the App Store Connect API key secrets on dahli4/ggotgalpi-demo, then re-run."
+            exit 1
+          fi
+
+      - name: Write API key
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s\n' "$APP_STORE_CONNECT_API_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+
+      - name: Archive and upload
+        run: chmod +x scripts/upload-testflight.sh && ./scripts/upload-testflight.sh

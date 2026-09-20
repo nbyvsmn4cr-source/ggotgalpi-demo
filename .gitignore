@@ -11,5 +11,20 @@ xcuserdata/
 # Swift Package Manager
 .build/
 
+# Signing material — never commit
+AuthKey_*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.dSYM.zip
+fastlane/.env
+fastlane/.env.local
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+vendor/bundle
+
 # Private planning material
 꽃갈피 어플.pdf
+

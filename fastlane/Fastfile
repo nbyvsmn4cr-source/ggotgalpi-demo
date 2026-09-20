@@ -1,0 +1,83 @@
+default_platform(:ios)
+skip_docs
+
+platform :ios do
+  PROJECT = "GgotgalpiDemo.xcodeproj"
+  SCHEME = "GgotgalpiDemo"
+  BUNDLE_ID = "com.dahli4.ggotgalpi"
+  TEAM_ID = "7H8779959T"
+
+  def api_key
+    key_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ID", "N6Z827248H")
+    issuer_id = ENV.fetch("APP_STORE_CONNECT_ISSUER_ID", "a045ac5a-5692-4437-bc68-385c149ce1ac")
+    key_filepath = ENV["APP_STORE_CONNECT_API_KEY_PATH"] || File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{key_id}.p8")
+
+    if ENV["APP_STORE_CONNECT_API_KEY"].to_s.strip != ""
+      return app_store_connect_api_key(
+        key_id: key_id,
+        issuer_id: issuer_id,
+        key_content: ENV["APP_STORE_CONNECT_API_KEY"],
+        is_key_content_base64: ENV["APP_STORE_CONNECT_API_KEY_BASE64"] == "true",
+        in_house: false
+      )
+    end
+
+    UI.user_error!("App Store Connect API key not found at #{key_filepath}") unless File.exist?(key_filepath)
+
+    app_store_connect_api_key(
+      key_id: key_id,
+      issuer_id: issuer_id,
+      key_filepath: key_filepath,
+      in_house: false
+    )
+  end
+
+  desc "Register bundle ID and App Store Connect app if missing"
+  lane :bootstrap_app do
+    produce(
+      app_identifier: BUNDLE_ID,
+      app_name: "꽃갈피",
+      language: "Korean",
+      app_version: "0.1",
+      sku: "ggotgalpi",
+      team_id: TEAM_ID,
+      skip_itc: false,
+      skip_devcenter: false,
+      api_key: api_key
+    )
+  end
+
+  desc "Archive a signed App Store IPA"
+  lane :build do
+    setup_ci if ENV["CI"]
+    api_key
+    build_number = ENV["BUILD_NUMBER"] || Time.now.strftime("%Y%m%d%H%M")
+    increment_build_number(
+      xcodeproj: PROJECT,
+      build_number: build_number
+    )
+
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: File.expand_path("../ExportOptions.plist", __dir__),
+      xcargs: "DEVELOPMENT_TEAM=#{TEAM_ID} -allowProvisioningUpdates",
+      destination: "generic/platform=iOS"
+    )
+  end
+
+  desc "Upload a signed build to TestFlight"
+  lane :beta do
+    api = api_key
+    build
+    upload_to_testflight(
+      api_key: api,
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      changelog: ENV["CHANGELOG"] || "내부 테스트 빌드",
+      uses_non_exempt_encryption: false
+    )
+  end
+end
