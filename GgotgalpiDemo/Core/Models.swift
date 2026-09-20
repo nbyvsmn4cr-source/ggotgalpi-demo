@@ -184,6 +184,16 @@ final class DemoStore: ObservableObject {
             .sorted { $0.date == $1.date ? $0.createdAt > $1.createdAt : $0.date > $1.date }
     }
 
+    /// 별점을 남긴 감상 기록만으로 책의 평균 별점을 계산합니다.
+    func averageRating(for bookID: UUID) -> Double? {
+        let ratings = entries(for: bookID)
+            .map(\.ratingValue)
+            .filter { $0 > 0 }
+
+        guard !ratings.isEmpty else { return nil }
+        return ratings.reduce(0, +) / Double(ratings.count)
+    }
+
     func entries(on date: Date) -> [ReadingEntry] {
         let calendar = Calendar.current
         return entries.filter { calendar.isDate($0.date, inSameDayAs: date) }

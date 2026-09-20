@@ -18,6 +18,10 @@ struct BookDetailView: View {
         store.entries(for: currentBook.id)
     }
 
+    private var averageRating: Double? {
+        store.averageRating(for: currentBook.id)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -57,6 +61,10 @@ struct BookDetailView: View {
                                 .padding(.vertical, 5)
                                 .background(GgotgalpiTheme.paperDeep)
                                 .clipShape(Capsule())
+
+                            if let averageRating {
+                                BookAverageRating(rating: averageRating)
+                            }
                         }
                         Spacer()
                     }
@@ -137,6 +145,33 @@ struct BookDetailView: View {
             }
         }
         .paperBackground()
+    }
+}
+
+struct BookAverageRating: View {
+    let rating: Double
+
+    private var starRating: Double {
+        ReadingRating.normalized(rating)
+    }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            HStack(spacing: 1) {
+                ForEach(1...5, id: \.self) { value in
+                    Image(systemName: ReadingRating.symbol(for: starRating, at: value))
+                        .font(.caption2)
+                        .foregroundStyle(starRating > Double(value - 1) ? GgotgalpiTheme.accent : GgotgalpiTheme.line)
+                }
+            }
+            .environment(\.layoutDirection, .leftToRight)
+
+            Text("평균 \(ReadingRating.label(for: rating))")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(GgotgalpiTheme.secondaryInk)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("평균 별점 \(ReadingRating.label(for: rating))")
     }
 }
 

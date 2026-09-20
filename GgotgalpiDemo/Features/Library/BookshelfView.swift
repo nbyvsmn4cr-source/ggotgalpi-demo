@@ -95,7 +95,11 @@ struct BookshelfView: View {
                                     Button {
                                         selectedBook = book
                                     } label: {
-                                        BookCard(book: book, entryCount: store.entries(for: book.id).count)
+                                        BookCard(
+                                            book: book,
+                                            entryCount: store.entries(for: book.id).count,
+                                            averageRating: store.averageRating(for: book.id)
+                                        )
                                     }
                                     .buttonStyle(.plain)
 
@@ -430,6 +434,7 @@ struct CategoryPicker: View {
 struct BookCard: View {
     let book: Book
     let entryCount: Int
+    let averageRating: Double?
 
     var body: some View {
         HStack(spacing: GgotgalpiTheme.Spacing.control) {
@@ -444,9 +449,15 @@ struct BookCard: View {
                     .font(.subheadline)
                     .foregroundStyle(GgotgalpiTheme.secondaryInk)
 
-                Text("감상 \(entryCount)개")
-                    .font(.caption)
-                    .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                HStack(spacing: 6) {
+                    Text("감상 \(entryCount)개")
+
+                    if let averageRating {
+                        Label("평균 \(ReadingRating.label(for: averageRating))", systemImage: "star.fill")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(GgotgalpiTheme.secondaryInk)
             }
             .fixedSize(horizontal: false, vertical: true)
 
