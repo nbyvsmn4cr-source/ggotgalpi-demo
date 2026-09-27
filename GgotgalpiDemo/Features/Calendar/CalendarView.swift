@@ -328,6 +328,13 @@ private struct CalendarMonthlySummary: View {
     @State private var featuredLastYearBookID: UUID?
     @State private var selectedPastBook: Book?
 
+    private var featuredLastYearFavoriteReview: ReadingEntry? {
+        guard let featuredLastYearBook else { return nil }
+        return featuredLastYearBook.entries.first {
+            $0.isFavoriteReview && $0.deletedAt == nil
+        }
+    }
+
     private var readBookCount: Int {
         Set(entries.map(\.bookID)).count
     }
@@ -401,9 +408,24 @@ private struct CalendarMonthlySummary: View {
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(GgotgalpiTheme.ink)
 
-                                Text(featuredLastYearBook.author)
-                                    .font(.caption)
-                                    .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                                if featuredLastYearFavoriteReview == nil {
+                                    Text(featuredLastYearBook.author)
+                                        .font(.caption)
+                                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                                }
+
+                                if let favoriteReview = featuredLastYearFavoriteReview {
+                                    Label("가장 마음에 드는 감상문", systemImage: "heart.fill")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(GgotgalpiTheme.accent)
+                                        .padding(.top, 4)
+
+                                    Text(favoriteReview.note)
+                                        .font(.caption)
+                                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
                             }
                         }
                     }
@@ -764,29 +786,44 @@ private struct CalendarDayBookEntryRow: View {
                 .accessibilityLabel("\(currentBook.title) 감상 기록 수정")
 
                 ForEach(entries) { entry in
-                    Button {
-                        editEntry(entry)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text("p.\(entry.pageFrom)-\(entry.pageTo)")
-                                    .font(.caption)
-                                    .foregroundStyle(GgotgalpiTheme.secondaryInk)
-                                Spacer()
-                                Text("\(entry.readingRound)회독")
-                                    .font(.caption)
-                                    .foregroundStyle(GgotgalpiTheme.secondaryInk)
-                            }
+                    HStack(alignment: .top, spacing: GgotgalpiTheme.Spacing.compact) {
+                        Button {
+                            editEntry(entry)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("p.\(entry.pageFrom)-\(entry.pageTo)")
+                                        .font(.caption)
+                                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                                    Spacer()
+                                    Text("\(entry.readingRound)회독")
+                                        .font(.caption)
+                                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                                }
 
-                            Text(entry.note)
-                                .font(.body)
-                                .foregroundStyle(GgotgalpiTheme.ink)
-                                .lineSpacing(4)
-                                .fixedSize(horizontal: false, vertical: true)
+                                Text(entry.note)
+                                    .font(.body)
+                                    .foregroundStyle(GgotgalpiTheme.ink)
+                                    .lineSpacing(4)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("감상 기록 수정")
+
+                        Button {
+                            store.toggleFavoriteReview(id: entry.id)
+                        } label: {
+                            Image(systemName: entry.isFavoriteReview ? "heart.fill" : "heart")
+                                .font(.body)
+                                .foregroundStyle(entry.isFavoriteReview ? GgotgalpiTheme.accent : GgotgalpiTheme.secondaryInk)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(entry.isFavoriteReview ? "가장 마음에 드는 감상문 지정 해제" : "가장 마음에 드는 감상문으로 지정")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("감상 기록 수정")
 
                     if entry.id != entries.last?.id {
                         Divider()
