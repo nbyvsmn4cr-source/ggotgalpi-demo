@@ -83,6 +83,7 @@ final class ReadingEntry {
     var pageTo: Int
     var note: String
     var favoriteSentence: String
+    var isFavoriteReview: Bool = false
     var readingRound: Int
     // 기존 정수 별점 필드는 유지해 저장된 기록을 그대로 읽습니다.
     var rating: Int = 0
@@ -260,8 +261,26 @@ final class DemoStore: ObservableObject {
 
     func moveEntryToTrash(id: UUID) {
         guard let entry = entries.first(where: { $0.id == id }) else { return }
+        entry.isFavoriteReview = false
         entry.deletedAt = Date()
         saveChanges()
+    }
+
+    func toggleFavoriteReview(id: UUID) {
+        guard let entry = entries.first(where: { $0.id == id }) else { return }
+
+        let shouldFavorite = !entry.isFavoriteReview
+        if shouldFavorite {
+            clearFavoriteReview(for: entry.bookID)
+        }
+        entry.isFavoriteReview = shouldFavorite
+        saveChanges()
+    }
+
+    private func clearFavoriteReview(for bookID: UUID) {
+        entries
+            .filter { $0.bookID == bookID && $0.isFavoriteReview }
+            .forEach { $0.isFavoriteReview = false }
     }
 
     func restoreEntry(id: UUID) {

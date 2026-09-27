@@ -95,13 +95,27 @@ struct BookDetailView: View {
                             .foregroundStyle(GgotgalpiTheme.secondaryInk)
                     } else {
                         ForEach(bookEntries) { entry in
-                            Button {
-                                editingEntry = entry
-                            } label: {
-                                ReadingEntryRow(entry: entry)
+                            HStack(alignment: .top, spacing: GgotgalpiTheme.Spacing.compact) {
+                                Button {
+                                    editingEntry = entry
+                                } label: {
+                                    ReadingEntryRow(entry: entry)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("감상 기록 수정")
+
+                                Button {
+                                    store.toggleFavoriteReview(id: entry.id)
+                                } label: {
+                                    Image(systemName: entry.isFavoriteReview ? "heart.fill" : "heart")
+                                        .font(.body)
+                                        .foregroundStyle(entry.isFavoriteReview ? GgotgalpiTheme.accent : GgotgalpiTheme.secondaryInk)
+                                        .frame(width: 36, height: 36)
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(entry.isFavoriteReview ? "가장 마음에 드는 감상문 지정 해제" : "가장 마음에 드는 감상문으로 지정")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityHint("감상 기록 수정")
                             if entry.id != bookEntries.last?.id { DividerLine() }
                         }
                     }
@@ -199,9 +213,17 @@ struct ReadingEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text(entry.date.shortKoreanDate)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(GgotgalpiTheme.ink)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.date.shortKoreanDate)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(GgotgalpiTheme.ink)
+
+                    if entry.isFavoriteReview {
+                        Label("가장 마음에 드는 감상문", systemImage: "heart.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(GgotgalpiTheme.accent)
+                    }
+                }
                 Spacer()
                 Text("\(entry.readingRound)회독 · p.\(entry.pageFrom)-p.\(entry.pageTo)")
                     .font(.caption)
