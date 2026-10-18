@@ -12,6 +12,7 @@ struct AddBookView: View {
     var body: some View {
         NavigationStack {
             Form {
+                StorageErrorSection()
                 Section {
                     TextField("책 제목", text: $title)
                     TextField("작가", text: $author)
@@ -24,7 +25,7 @@ struct AddBookView: View {
                 } header: {
                     Text("새 책")
                 } footer: {
-                    Text("데모에서는 책마다 구분 색상을 자동으로 지정합니다.")
+                    Text("책마다 구분 색상을 자동으로 지정합니다.")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -38,6 +39,7 @@ struct AddBookView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") {
                         let book = store.addBook(title: title, author: author, publisher: publisher, category: category)
+                        guard store.storageError == nil else { return }
                         dismiss()
                         onBookAdded?(book)
                     }
@@ -74,6 +76,7 @@ struct EditBookView: View {
     var body: some View {
         NavigationStack {
             Form {
+                StorageErrorSection()
                 Section("책 정보") {
                     TextField("책 제목", text: $title)
                     TextField("작가", text: $author)
@@ -113,6 +116,7 @@ struct EditBookView: View {
                             readingStatus: readingStatus,
                             isHiddenFromCalendar: isHiddenFromCalendar
                         )
+                        guard store.storageError == nil else { return }
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -142,6 +146,7 @@ struct AddReadingEntryView: View {
     @State private var readingRound = 0
     @State private var rating = 0.0
     @State private var hasFinishedReadingRound = false
+    @State private var roundBeforeCompletion: Int?
     @State private var hasInitializedValues = false
     @State private var showingEntryDeletionConfirmation = false
     @FocusState private var focusedWritingField: WritingField?
@@ -162,10 +167,24 @@ struct AddReadingEntryView: View {
             .pageTo
     }
 
+    private var pageValidationError: String? {
+        let from = pageFrom.trimmingCharacters(in: .whitespacesAndNewlines)
+        let to = pageTo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (!from.isEmpty && (Int(from) == nil || (Int(from) ?? -1) < 0))
+            || (!to.isEmpty && (Int(to) == nil || (Int(to) ?? -1) < 0)) {
+            return "쪽수는 0 이상의 정수로 입력해 주세요."
+        }
+        if !from.isEmpty, !to.isEmpty, let start = Int(from), let end = Int(to), start > end {
+            return "끝 쪽수는 시작 쪽수보다 작을 수 없어요."
+        }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 Form {
+                    StorageErrorSection()
                     Section {
                         DatePicker("읽은 날짜", selection: $date, displayedComponents: .date)
                         Stepper("\(readingRound)회독", value: $readingRound, in: 0...99)
@@ -179,7 +198,7 @@ struct AddReadingEntryView: View {
                         Text("별의 왼쪽은 반점, 오른쪽은 정수 점수입니다. 선택한 점수를 다시 누르면 해제됩니다.")
                     }
 
-                    Section("읽은 구간") {
+                    Section {
                         HStack {
                             TextField("시작", text: $pageFrom)
                                 .keyboardType(.numberPad)
@@ -190,6 +209,10 @@ struct AddReadingEntryView: View {
                             Text("쪽까지")
                                 .foregroundStyle(GgotgalpiTheme.secondaryInk)
                         }
+                    } header: {
+                        Text("읽은 구간")
+                    } footer: {
+                        if let pageValidationError { Text(pageValidationError).foregroundStyle(.red) }
                     }
 
                     Section("감상") {
@@ -217,7 +240,11 @@ struct AddReadingEntryView: View {
                             let isFinishingCurrentRound = !hasFinishedReadingRound
                             hasFinishedReadingRound = isFinishingCurrentRound
                             if isFinishingCurrentRound {
-                                readingRound += 1
+                                roundBeforeCompletion = readingRound
+                                readingRound = min(99, readingRound + 1)
+                            } else if let previous = roundBeforeCompletion {
+                                readingRound = previous
+                                roundBeforeCompletion = nil
                             }
                         } label: {
                             HStack(spacing: GgotgalpiTheme.Spacing.control) {
@@ -237,17 +264,17 @@ struct AddReadingEntryView: View {
                 .scrollContentBackground(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .background(GgotgalpiTheme.paper)
-                .onChange(of: focusedWritingField) { field in
+                .onChange(of: focusedWritingField) { _, field in
                     guard let field else { return }
                     scrollWritingFieldIntoView(field, with: proxy, animated: true)
                 }
                 // TextEditor는 긴 글에서 내부적으로만 스크롤됩니다. 입력할 때마다
                 // Form도 함께 조정해 편집기 자체가 키보드 아래로 내려가지 않게 합니다.
-                .onChange(of: note) { _ in
+                .onChange(of: note) { _, _ in
                     guard focusedWritingField == .note else { return }
                     scrollWritingFieldIntoView(.note, with: proxy)
                 }
-                .onChange(of: favoriteSentence) { _ in
+                .onChange(of: favoriteSentence) { _, _ in
                     guard focusedWritingField == .favoriteSentence else { return }
                     scrollWritingFieldIntoView(.favoriteSentence, with: proxy)
                 }
@@ -263,8 +290,8 @@ struct AddReadingEntryView: View {
                                 store.updateEntry(
                                     id: editingEntry.id,
                                     date: date,
-                                    pageFrom: Int(pageFrom) ?? 0,
-                                    pageTo: Int(pageTo) ?? 0,
+                                    pageFrom: Int(pageFrom.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
+                                    pageTo: Int(pageTo.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
                                     readingRound: readingRound,
@@ -274,8 +301,8 @@ struct AddReadingEntryView: View {
                                 store.addEntry(
                                     bookID: book.id,
                                     date: date,
-                                    pageFrom: Int(pageFrom) ?? 0,
-                                    pageTo: Int(pageTo) ?? 0,
+                                    pageFrom: Int(pageFrom.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
+                                    pageTo: Int(pageTo.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0,
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
                                     readingRound: readingRound,
@@ -283,11 +310,14 @@ struct AddReadingEntryView: View {
                                 )
                             }
 
+                            guard store.storageError == nil else { return }
                             if hasFinishedReadingRound {
                                 store.markBookAsFinished(id: book.id)
                             }
+                            guard store.storageError == nil else { return }
                             dismiss()
                         }
+                        .disabled(pageValidationError != nil)
                     }
 
                     if editingEntry != nil {
@@ -307,11 +337,12 @@ struct AddReadingEntryView: View {
                 if let editingEntry {
                     store.moveEntryToTrash(id: editingEntry.id)
                 }
+                guard store.storageError == nil else { return }
                 dismiss()
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("30일 동안 휴지통에 보관되며, 이후 자동으로 영구 삭제됩니다.")
+            Text("\(DemoStore.trashRetentionDays)일 동안 휴지통에 보관되며, 이후 앱 이용 시 자동으로 영구 삭제됩니다.")
         }
         .onAppear {
             guard
@@ -327,7 +358,8 @@ struct AddReadingEntryView: View {
                 favoriteSentence = editingEntry.favoriteSentence
                 readingRound = editingEntry.readingRound
                 rating = editingEntry.ratingValue
-                hasFinishedReadingRound = book.readingStatus == .finished
+                // 책의 현재 상태를 과거 감상문의 완료 여부로 해석하지 않습니다.
+                hasFinishedReadingRound = false
             } else if book.readingStatus == .reading, let mostRecentPage {
                 pageFrom = String(mostRecentPage)
             }
@@ -349,6 +381,20 @@ struct AddReadingEntryView: View {
             transaction.animation = nil
             withTransaction(transaction) {
                 proxy.scrollTo(field, anchor: .center)
+            }
+        }
+    }
+}
+
+private struct StorageErrorSection: View {
+    @EnvironmentObject private var store: DemoStore
+
+    var body: some View {
+        if let error = store.storageError {
+            Section {
+                Text(error).foregroundStyle(.red)
+            } header: {
+                Text("저장 상태를 확인해 주세요")
             }
         }
     }

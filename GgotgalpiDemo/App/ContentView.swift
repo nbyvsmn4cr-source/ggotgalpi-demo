@@ -119,7 +119,16 @@ struct ContentView: View {
         .tint(GgotgalpiTheme.accent)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
+            store.refresh()
             store.purgeExpiredEntries()
+        }
+        .alert("기록 처리 오류", isPresented: Binding(
+            get: { store.storageError != nil },
+            set: { if !$0 { store.storageError = nil } }
+        )) {
+            Button("확인") { store.storageError = nil }
+        } message: {
+            Text(store.storageError ?? "")
         }
     }
 

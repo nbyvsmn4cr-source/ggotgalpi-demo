@@ -339,7 +339,7 @@ private struct CalendarMonthlySummary: View {
 
     private var featuredLastYearFavoriteReview: ReadingEntry? {
         guard let featuredLastYearBook else { return nil }
-        return featuredLastYearBook.entries.first {
+        return featuredLastYearBook.entries?.first {
             $0.isFavoriteReview && $0.deletedAt == nil
         }
     }

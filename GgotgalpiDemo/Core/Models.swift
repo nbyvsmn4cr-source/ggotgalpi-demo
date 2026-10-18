@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import CoreData
+import Combine
 
 enum BookCategory: String, CaseIterable, Identifiable {
     case all = "전체"
@@ -32,7 +34,7 @@ final class Book {
     private var readingStatusRawValue: String = ReadingStatus.wantToRead.rawValue
     private var coverColorIndex: Int = 0
     var isHiddenFromCalendar: Bool = false
-    @Relationship(deleteRule: .cascade, inverse: \ReadingEntry.book) var entries: [ReadingEntry] = []
+    @Relationship(deleteRule: .cascade, inverse: \ReadingEntry.book) var entries: [ReadingEntry]? = []
 
     var category: BookCategory {
         get { BookCategory(rawValue: categoryRawValue) ?? .literature }
@@ -163,6 +165,8 @@ final class DemoStore: ObservableObject {
     @Published private(set) var entries: [ReadingEntry] = []
     @Published private(set) var trashedEntries: [ReadingEntry] = []
     @Published private(set) var favoriteAuthorKeys: Set<String> = []
+    @Published var storageError: String?
+    private var syncObserver: AnyCancellable?
     @Published private var calendarBookOrders: [String: [UUID]] = [:]
 
     private let modelContext: ModelContext
@@ -175,9 +179,15 @@ final class DemoStore: ObservableObject {
         refresh()
         purgeExpiredEntries()
 
-        if books.isEmpty {
-            seedSampleData()
-        }
+        // 원격 가져오기가 끝나면 수동으로 관리하는 화면 목록도 다시 읽습니다.
+        syncObserver = NotificationCenter.default.publisher(for: NSPersistentCloudKitContainer.eventChangedNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                    as? NSPersistentCloudKitContainer.Event,
+                    event.type == .import, event.endDate != nil, event.succeeded else { return }
+                self?.refresh()
+            }
     }
 
     func book(for id: UUID) -> Book? {
@@ -349,7 +359,8 @@ final class DemoStore: ObservableObject {
             refresh()
             return expiredEntries.count
         } catch {
-            assertionFailure("만료된 휴지통 기록을 삭제하지 못했습니다: \(error.localizedDescription)")
+            modelContext.rollback()
+            storageError = "휴지통 정리를 완료하지 못했어요. 기록은 보존됩니다.\n\(error.localizedDescription)"
             return 0
         }
     }
@@ -422,7 +433,7 @@ final class DemoStore: ObservableObject {
         saveCalendarBookOrders()
     }
 
-    private func refresh() {
+    func refresh() {
         do {
             books = try modelContext.fetch(FetchDescriptor<Book>())
             let allEntries = try modelContext.fetch(FetchDescriptor<ReadingEntry>())
@@ -431,19 +442,18 @@ final class DemoStore: ObservableObject {
                 .filter { $0.deletedAt != nil }
                 .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
         } catch {
-            assertionFailure("SwiftData 데이터를 불러오지 못했습니다: \(error.localizedDescription)")
-            books = []
-            entries = []
-            trashedEntries = []
+            storageError = "기록을 불러오지 못했어요. 앱을 다시 열어 주세요.\n\(error.localizedDescription)"
         }
     }
 
     private func saveChanges() {
+        storageError = nil
         do {
             try modelContext.save()
             refresh()
         } catch {
-            assertionFailure("SwiftData 데이터를 저장하지 못했습니다: \(error.localizedDescription)")
+            modelContext.rollback()
+            storageError = "저장하지 못했어요. 기기의 여유 공간을 확인한 후 다시 시도해 주세요.\n\(error.localizedDescription)"
         }
     }
 

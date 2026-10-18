@@ -203,11 +203,12 @@ struct BookDetailView: View {
             .alert("책을 삭제할까요?", isPresented: $showingBookDeletionConfirmation) {
                 Button("삭제", role: .destructive) {
                     store.deleteBook(id: currentBook.id)
+                    guard store.storageError == nil else { return }
                     dismiss()
                 }
                 Button("취소", role: .cancel) {}
             } message: {
-                Text("책과 연결된 모든 감상 기록도 함께 삭제됩니다.")
+                Text("책과 연결된 모든 감상 기록(휴지통 포함)이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
             }
         }
         .paperBackground()
