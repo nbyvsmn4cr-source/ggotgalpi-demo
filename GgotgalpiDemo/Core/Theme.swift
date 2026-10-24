@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension Font {
     /// 감상 기록과 인용문에만 사용하는 둘기마요 글꼴입니다.
@@ -28,20 +29,28 @@ extension Font {
 }
 
 enum GgotgalpiTheme {
+    // 시스템 외관이 바뀌면 이미 표시 중인 화면과 시트도 함께 갱신됩니다.
+    private static func adaptive(_ light: UIColor, dark: CGFloat) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(white: dark, alpha: 1) : light
+        })
+    }
     // 앱 전반의 페이지 배경은 메인 화면과 같은 거의 흰색으로 통일합니다.
-    static let paper = Color(red: 0.992, green: 0.988, blue: 0.976)
-    static let paperDeep = Color(red: 0.949, green: 0.922, blue: 0.867)
+    static let paper = adaptive(UIColor(red: 0.992, green: 0.988, blue: 0.976, alpha: 1), dark: 0.07)
+    static let paperDeep = adaptive(UIColor(red: 0.949, green: 0.922, blue: 0.867, alpha: 1), dark: 0.16)
     // 달력 카드 바깥에만 쓰는 거의 흰색의 웜 화이트입니다.
-    static let calendarCanvas = Color(red: 0.992, green: 0.988, blue: 0.976)
-    static let ink = Color(red: 0.18, green: 0.18, blue: 0.17)
-    static let secondaryInk = Color(red: 0.43, green: 0.41, blue: 0.37)
-    static let line = Color(red: 0.84, green: 0.82, blue: 0.77)
+    static let calendarCanvas = paper
+    static let ink = adaptive(UIColor(red: 0.18, green: 0.18, blue: 0.17, alpha: 1), dark: 0.93)
+    static let secondaryInk = adaptive(UIColor(red: 0.43, green: 0.41, blue: 0.37, alpha: 1), dark: 0.70)
+    static let line = adaptive(UIColor(red: 0.84, green: 0.82, blue: 0.77, alpha: 1), dark: 0.30)
     // 월간 달력의 가로·세로 격자에만 쓰는 은은한 웜 그레이입니다.
-    static let calendarGridLine = Color(red: 0.875, green: 0.847, blue: 0.796)
-    static let accent = Color(red: 0.46, green: 0.43, blue: 0.36)
+    static let calendarGridLine = adaptive(UIColor(red: 0.875, green: 0.847, blue: 0.796, alpha: 1), dark: 0.27)
+    static let accent = adaptive(UIColor(red: 0.46, green: 0.43, blue: 0.36, alpha: 1), dark: 0.78)
     // 좋아하는 작가 카드 전용: 기존 베이지·갈색 대신 중립적인 회색 계열을 사용합니다.
-    static let favoriteAuthorCard = Color.white
-    static let favoriteAuthorSelected = Color(white: 0.90)
+    static let surface = adaptive(.white, dark: 0.12)
+    static let favoriteAuthorCard = surface
+    static let favoriteAuthorSelected = adaptive(UIColor(white: 0.90, alpha: 1), dark: 0.25)
+    static let toggleTint = adaptive(UIColor(white: 0.28, alpha: 1), dark: 0.40)
 
     enum Spacing {
         static let compact: CGFloat = 8
@@ -109,8 +118,27 @@ struct BookColorMark: View {
     let title: String
     let color: Color
     var size: CGFloat = 48
+    var coverURL: String = ""
 
     var body: some View {
+        Group {
+            if let url = URL(string: coverURL), url.scheme == "https" {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit()
+                    } else {
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private var placeholder: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(color)
             .frame(width: size, height: size)
@@ -119,7 +147,6 @@ struct BookColorMark: View {
                     .font(.doveMayo(.headline, bold: true))
                     .foregroundStyle(.white.opacity(0.92))
             }
-            .accessibilityHidden(true)
     }
 }
 

@@ -449,7 +449,7 @@ private struct SearchBookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            BookColorMark(title: book.title, color: book.coverColor, size: 44)
+            BookColorMark(title: book.title, color: book.coverColor, size: 44, coverURL: book.coverURL)
             VStack(alignment: .leading, spacing: 3) {
                 Text(book.title)
                     .font(.doveMayo(.headline, bold: true))
@@ -477,7 +477,7 @@ private struct SearchEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
-                BookColorMark(title: book.title, color: book.coverColor, size: 40)
+                BookColorMark(title: book.title, color: book.coverColor, size: 40, coverURL: book.coverURL)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(book.title)

@@ -34,7 +34,7 @@ struct BookDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 25) {
                     HStack(alignment: .center, spacing: 16) {
-                        BookColorMark(title: currentBook.title, color: currentBook.coverColor, size: 72)
+                        BookColorMark(title: currentBook.title, color: currentBook.coverColor, size: 72, coverURL: currentBook.coverURL)
 
                         VStack(alignment: .leading, spacing: 9) {
                             HStack(spacing: 6) {
@@ -104,7 +104,7 @@ struct BookDetailView: View {
                                     selectedRelatedBook = relatedBook
                                 } label: {
                                     HStack(spacing: GgotgalpiTheme.Spacing.control) {
-                                        BookColorMark(title: relatedBook.title, color: relatedBook.coverColor, size: 36)
+                                        BookColorMark(title: relatedBook.title, color: relatedBook.coverColor, size: 36, coverURL: relatedBook.coverURL)
                                         Text(relatedBook.title)
                                             .font(.doveMayo(.subheadline, bold: true))
                                             .foregroundStyle(GgotgalpiTheme.ink)
@@ -261,7 +261,6 @@ struct DetailStat: View {
 
 struct ReadingEntryRow: View {
     let entry: ReadingEntry
-    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -300,7 +299,7 @@ struct ReadingEntryRow: View {
                 .accessibilityLabel("별점 \(ReadingRating.label(for: entry.ratingValue))")
             }
 
-            if showsFavoriteSentences && !entry.favoriteSentence.isEmpty {
+            if !entry.favoriteSentence.isEmpty {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "quote.opening")
                         .font(.doveMayo(.caption, bold: true))

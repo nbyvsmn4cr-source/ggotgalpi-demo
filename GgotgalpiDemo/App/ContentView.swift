@@ -407,7 +407,6 @@ struct SettingsView: View {
     let panelWidth: CGFloat
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
     @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
-    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
     @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var isShowingTrash = false
     @State private var showingTrashRetentionOptions = false
@@ -423,9 +422,7 @@ struct SettingsView: View {
                     }
 
                     Toggle("출판사 표시", isOn: $showsPublisher)
-                        .tint(Color(white: 0.28))
-                    Toggle("마음에 드는 문장 바로가기", isOn: $showsFavoriteSentences)
-                        .tint(Color(white: 0.28))
+                        .tint(GgotgalpiTheme.toggleTint)
                 } header: {
                     Text("꽃갈피")
                         .foregroundStyle(.gray)
@@ -465,12 +462,12 @@ struct SettingsView: View {
                         .foregroundStyle(.gray)
                 }
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(GgotgalpiTheme.ink)
             .tint(.gray)
-            .listRowBackground(Color.white)
+            .listRowBackground(GgotgalpiTheme.surface)
             .listRowSeparatorTint(.gray.opacity(0.35))
             .scrollContentBackground(.hidden)
-            .background(Color.white)
+            .background(GgotgalpiTheme.surface)
             .safeAreaPadding(.bottom, 64)
             .frame(width: panelWidth)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)

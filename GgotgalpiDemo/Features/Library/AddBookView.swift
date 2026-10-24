@@ -8,11 +8,33 @@ struct AddBookView: View {
     @State private var author = ""
     @State private var publisher = ""
     @State private var category: BookCategory = .literature
+    @State private var showsSearch = false
+    @State private var selectedResult: CatalogBook?
 
     var body: some View {
         NavigationStack {
             Form {
                 StorageErrorSection()
+                Section {
+                    Button {
+                        showsSearch = true
+                    } label: {
+                        Label("책 제목 · ISBN으로 검색", systemImage: "magnifyingglass")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    if let selectedResult {
+                        HStack {
+                            CatalogCover(url: selectedResult.coverURL)
+                            Text("검색한 책 정보가 입력됐어요. 아래에서 수정할 수 있어요.")
+                                .font(.doveMayo(.caption))
+                            Spacer()
+                            Button("해제") { self.selectedResult = nil }
+                        }
+                    }
+                } footer: {
+                    Text("검색하지 않고 직접 입력해도 돼요.")
+                }
                 Section {
                     TextField("책 제목", text: $title)
                     TextField("작가", text: $author)
@@ -38,7 +60,8 @@ struct AddBookView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") {
-                        let book = store.addBook(title: title, author: author, publisher: publisher, category: category)
+                        let book = store.addBook(title: title.trimmingCharacters(in: .whitespacesAndNewlines), author: author, publisher: publisher, category: category,
+                                                 isbn: selectedResult?.isbn ?? "", coverURL: selectedResult?.coverURL?.absoluteString ?? "")
                         guard store.storageError == nil else { return }
                         dismiss()
                         onBookAdded?(book)
@@ -47,8 +70,174 @@ struct AddBookView: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .sheet(isPresented: $showsSearch) {
+            CatalogSearchView { result in
+                title = result.title
+                author = result.authors.joined(separator: ", ")
+                publisher = result.publisher
+                selectedResult = result
+            }
+        }
+        .presentationDetents([.medium, .large])
         .paperBackground()
+    }
+}
+
+private struct CatalogBook: Decodable {
+    let title: String
+    let authors: [String]
+    let publisher: String
+    let isbn: String
+    let thumbnail: String
+    let url: String
+
+    var coverURL: URL? { Self.secureURL(thumbnail) }
+    var detailURL: URL? { Self.secureURL(url) }
+    private static func secureURL(_ value: String) -> URL? {
+        guard let url = URL(string: value), url.scheme == "https", url.host != nil,
+              url.user == nil, url.password == nil else { return nil }
+        return url
+    }
+}
+
+private struct CatalogPage: Decodable {
+    let books: [CatalogBook]
+    let isEnd: Bool
+}
+
+private struct CatalogCover: View {
+    let url: URL?
+    var body: some View {
+        AsyncImage(url: url) { image in
+            image.resizable().scaledToFit()
+        } placeholder: {
+            Image(systemName: "book.closed").foregroundStyle(.secondary)
+        }
+        .frame(width: 44, height: 64)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct CatalogSearchView: View {
+    @Environment(\.dismiss) private var dismiss
+    let onSelect: (CatalogBook) -> Void
+    @State private var query = ""
+    @State private var submittedQuery = ""
+    @State private var results: [CatalogBook] = []
+    @State private var isLoading = false
+    @State private var hasSearched = false
+    @State private var isEnd = true
+    @State private var page = 0
+    @State private var errorMessage: String?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var requestID = UUID()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        TextField("책 제목 또는 ISBN", text: $query)
+                            .submitLabel(.search)
+                            .onSubmit { startSearch() }
+                            .autocorrectionDisabled()
+                        Button("검색") { startSearch() }
+                            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                } footer: {
+                    Text("검색어는 Cloudflare와 카카오에 전달돼요. 감상문은 전송하지 않아요.")
+                }
+                if let errorMessage {
+                    Section { Text(errorMessage).foregroundStyle(.secondary) }
+                }
+                if hasSearched && results.isEmpty && !isLoading && errorMessage == nil {
+                    Text("검색 결과가 없어요. 다른 제목이나 ISBN으로 검색하거나 직접 입력해 주세요.")
+                }
+                ForEach(results.indices, id: \.self) { index in
+                    let book = results[index]
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button {
+                            onSelect(book)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                CatalogCover(url: book.coverURL)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(book.title).font(.doveMayo(.headline, bold: true))
+                                    Text(book.authors.joined(separator: ", ")).font(.doveMayo(.subheadline))
+                                    Text(book.publisher).font(.doveMayo(.caption)).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if let url = book.detailURL {
+                            Link("Daum 책 정보 보기", destination: url).font(.doveMayo(.caption))
+                        }
+                    }
+                }
+                if isLoading {
+                    ProgressView("책을 찾고 있어요")
+                } else if !isEnd {
+                    Button("더 보기") { load(query: submittedQuery, page: page + 1) }
+                }
+                Section { Text("도서 검색 제공: Kakao · Daum").font(.doveMayo(.caption)).foregroundStyle(.secondary) }
+            }
+            .scrollContentBackground(.hidden)
+            .background(GgotgalpiTheme.paper)
+            .navigationTitle("책 검색")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+        }
+        .onDisappear { searchTask?.cancel(); requestID = UUID() }
+    }
+
+    private func startSearch() {
+        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        submittedQuery = value
+        results = []
+        page = 0
+        isEnd = true
+        load(query: value, page: 1)
+    }
+
+    private func load(query: String, page requestedPage: Int) {
+        searchTask?.cancel()
+        let token = UUID()
+        requestID = token
+        isLoading = true
+        errorMessage = nil
+        searchTask = Task { @MainActor in
+            defer { if requestID == token { isLoading = false } }
+            do {
+                var components = URLComponents(string: "https://ggotgalpi-book-search.rinarocketpunch.workers.dev/books")!
+                components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "page", value: String(requestedPage))]
+                var request = URLRequest(url: components.url!)
+                request.timeoutInterval = 15
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                let (data, response) = try await URLSession.shared.data(for: request)
+                try Task.checkCancellation()
+                guard requestID == token else { return }
+                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                guard http.statusCode == 200 else {
+                    errorMessage = http.statusCode == 429
+                        ? "검색 요청이 많아요. 잠시 후 다시 시도해 주세요. 직접 입력은 계속 이용할 수 있어요."
+                        : "지금은 책 검색을 이용할 수 없어요. 잠시 후 다시 검색하거나 직접 입력해 주세요."
+                    return
+                }
+                let result = try JSONDecoder().decode(CatalogPage.self, from: data)
+                results.append(contentsOf: result.books)
+                page = requestedPage
+                isEnd = result.isEnd || requestedPage >= 50
+                hasSearched = true
+            } catch {
+                guard !Task.isCancelled, requestID == token else { return }
+                errorMessage = "책 정보를 가져오지 못했어요. 인터넷 연결을 확인한 뒤 다시 검색하거나 직접 입력해 주세요."
+            }
+        }
     }
 }
 

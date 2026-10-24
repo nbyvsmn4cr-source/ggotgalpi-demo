@@ -33,7 +33,8 @@ struct MyRecordView: View {
                                 BookColorMark(
                                     title: book.title,
                                     color: book.coverColor,
-                                    size: 42
+                                    size: 42,
+                                    coverURL: book.coverURL
                                 )
 
                                 VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.compact) {
@@ -207,7 +208,7 @@ private struct TrashEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.control) {
             HStack(alignment: .top, spacing: GgotgalpiTheme.Spacing.control) {
-                BookColorMark(title: book.title, color: book.coverColor, size: 42)
+                BookColorMark(title: book.title, color: book.coverColor, size: 42, coverURL: book.coverURL)
 
                 VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.compact) {
                     HStack(alignment: .firstTextBaseline) {
@@ -347,7 +348,7 @@ struct FavoriteSentencesShortcut: View {
                 .foregroundStyle(GgotgalpiTheme.secondaryInk)
         }
         .padding(GgotgalpiTheme.Spacing.content)
-        .background(Color.white.opacity(0.58), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(GgotgalpiTheme.surface.opacity(0.58), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("마음에 드는 문장 모음")
@@ -361,7 +362,7 @@ struct FavoriteSentenceRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: GgotgalpiTheme.Spacing.control) {
-            BookColorMark(title: book.title, color: book.coverColor, size: 42)
+            BookColorMark(title: book.title, color: book.coverColor, size: 42, coverURL: book.coverURL)
 
             VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.compact) {
                 HStack(alignment: .firstTextBaseline) {

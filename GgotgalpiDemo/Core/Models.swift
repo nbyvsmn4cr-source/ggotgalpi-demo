@@ -30,6 +30,8 @@ final class Book {
     var title: String = ""
     var author: String = ""
     var publisher: String = ""
+    var isbn: String = ""
+    var coverURL: String = ""
     private var categoryRawValue: String = BookCategory.literature.rawValue
     private var readingStatusRawValue: String = ReadingStatus.wantToRead.rawValue
     private var coverColorIndex: Int = 0
@@ -241,7 +243,7 @@ final class DemoStore: ObservableObject {
     }
 
     @discardableResult
-    func addBook(title: String, author: String, publisher: String = "", category: BookCategory) -> Book {
+    func addBook(title: String, author: String, publisher: String = "", category: BookCategory, isbn: String = "", coverURL: String = "") -> Book {
         let book = Book(
             title: title,
             author: author,
@@ -249,6 +251,8 @@ final class DemoStore: ObservableObject {
             category: category,
             coverColorIndex: books.count % 3
         )
+        book.isbn = isbn
+        book.coverURL = coverURL
         modelContext.insert(book)
         saveChanges()
         return book

@@ -11,5 +11,11 @@ xcuserdata/
 # Swift Package Manager
 .build/
 
+# Server credentials and build tools
+.dev.vars*
+.env*
+.wrangler/
+node_modules/
+
 # Private planning material
 꽃갈피 어플.pdf

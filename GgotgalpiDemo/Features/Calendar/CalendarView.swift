@@ -12,6 +12,7 @@ struct CalendarView: View {
     @State private var isShowingFilters = false
     @State private var reorderRequest: CalendarBookReorderRequest?
     @State private var dayEntriesRequest: CalendarDayEntriesRequest?
+    @State private var recentEntryRequest: CalendarDayEntryEditRequest?
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
     @FocusState private var isSearchFieldFocused: Bool
@@ -133,7 +134,11 @@ struct CalendarView: View {
                                 lastYearMonth: lastYearMonth,
                                 lastYearBooks: lastYearMonthlyBooks,
                                 lastYearEntries: lastYearMonthlyEntries,
-                                pastHighlightRefreshID: pastHighlightRefreshID
+                                pastHighlightRefreshID: pastHighlightRefreshID,
+                                openRecentEntry: { book, entry in
+                                    closeSearch()
+                                    recentEntryRequest = CalendarDayEntryEditRequest(book: book, entry: entry)
+                                }
                             )
                         }
                     }
@@ -175,7 +180,7 @@ struct CalendarView: View {
                     .foregroundStyle(GgotgalpiTheme.ink)
                     .frame(height: 40)
                     .padding(.horizontal, GgotgalpiTheme.Spacing.control)
-                    .background(Color.white.opacity(0.82), in: Capsule())
+                    .background(GgotgalpiTheme.surface.opacity(0.82), in: Capsule())
                     .padding(.leading, GgotgalpiTheme.Spacing.screen)
                 }
             }
@@ -184,6 +189,9 @@ struct CalendarView: View {
         .paperBackground()
         .onChange(of: searchResetID) {
             closeSearch()
+        }
+        .sheet(item: $recentEntryRequest) { request in
+            AddReadingEntryView(book: request.book, editingEntry: request.entry)
         }
         .sheet(item: $reorderRequest) { request in
             CalendarBookOrderEditor(date: request.date, books: request.books) { bookIDs in
@@ -334,6 +342,7 @@ private struct CalendarMonthlySummary: View {
     let lastYearBooks: [Book]
     let lastYearEntries: [ReadingEntry]
     let pastHighlightRefreshID: Int
+    let openRecentEntry: (Book, ReadingEntry) -> Void
     @State private var featuredLastYearBookID: UUID?
     @State private var selectedPastBook: Book?
 
@@ -375,21 +384,29 @@ private struct CalendarMonthlySummary: View {
             if let latestEntry, let latestBook {
                 Divider()
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("최근 감상 · \(latestEntry.date.shortKoreanDate)")
-                        .font(.doveMayo(.caption, bold: true))
-                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                Button {
+                    openRecentEntry(latestBook, latestEntry)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("최근 감상 · \(latestEntry.date.shortKoreanDate)")
+                            .font(.doveMayo(.caption, bold: true))
+                            .foregroundStyle(GgotgalpiTheme.secondaryInk)
 
-                    Text(latestBook.title)
-                        .font(.doveMayo(.subheadline, bold: true))
-                        .foregroundStyle(GgotgalpiTheme.ink)
+                        Text(latestBook.title)
+                            .font(.doveMayo(.subheadline, bold: true))
+                            .foregroundStyle(GgotgalpiTheme.ink)
 
-                    Text(latestEntry.note)
-                        .font(.doveMayo(.caption))
-                        .foregroundStyle(GgotgalpiTheme.secondaryInk)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        Text(latestEntry.note)
+                            .font(.doveMayo(.caption))
+                            .foregroundStyle(GgotgalpiTheme.secondaryInk)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint("이 감상 기록을 확인하고 수정합니다")
             } else {
                 Text("이번 달에 남긴 감상이 아직 없어요.")
                     .font(.doveMayo(.subheadline))
@@ -409,7 +426,8 @@ private struct CalendarMonthlySummary: View {
                             BookColorMark(
                                 title: featuredLastYearBook.title,
                                 color: featuredLastYearBook.coverColor,
-                                size: 38
+                                size: 38,
+                                coverURL: featuredLastYearBook.coverURL
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -489,7 +507,7 @@ private struct CalendarPastReadingEntriesSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.section) {
                     HStack(spacing: GgotgalpiTheme.Spacing.control) {
-                        BookColorMark(title: book.title, color: book.coverColor, size: 52)
+                        BookColorMark(title: book.title, color: book.coverColor, size: 52, coverURL: book.coverURL)
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(book.title)
@@ -803,7 +821,7 @@ private struct CalendarDayBookEntryRow: View {
             Button {
                 editBook(currentBook)
             } label: {
-                BookColorMark(title: currentBook.title, color: currentBook.coverColor, size: 44)
+                BookColorMark(title: currentBook.title, color: currentBook.coverColor, size: 44, coverURL: currentBook.coverURL)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(currentBook.title) 책 정보 수정")

@@ -15,7 +15,8 @@ struct PersistenceRegression {
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let store = DemoStore(modelContext: container.mainContext)
         precondition(store.books.isEmpty && store.entries.isEmpty, "Fresh install must not seed demo records")
-        let book = store.addBook(title: "테스트 책", author: "테스트 작가", category: .literature)
+        let book = store.addBook(title: "테스트 책", author: "테스트 작가", category: .literature,
+                                 isbn: "9788996991342", coverURL: "https://example.com/cover.jpg")
         let chosenDate = Calendar.current.date(from: DateComponents(year: 2024, month: 2, day: 29))!
         store.addEntry(bookID: book.id, date: chosenDate, pageFrom: 1, pageTo: 20,
             note: "영구 저장 확인", favoriteSentence: "기억할 문장", readingRound: 1, rating: 0.5)
@@ -33,6 +34,8 @@ struct PersistenceRegression {
         let reopened = try ModelContainer(for: schema, configurations: [configuration])
         let reloaded = DemoStore(modelContext: reopened.mainContext)
         precondition(reloaded.books.count == 1 && reloaded.entries.count == 1)
+        precondition(reloaded.books[0].isbn == "9788996991342")
+        precondition(reloaded.books[0].coverURL == "https://example.com/cover.jpg")
         precondition(reloaded.entries[0].note == "영구 저장 확인")
         precondition(reloaded.entries[0].ratingValue == 0.5)
         precondition(reloaded.entries[0].book?.id == book.id)

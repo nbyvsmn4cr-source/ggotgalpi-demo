@@ -1,0 +1,16 @@
+{
+  "name": "ggotgalpi-book-search",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": true,
+  "preview_urls": false,
+  "keep_vars": true,
+  "observability": { "enabled": false },
+  "ratelimits": [
+    {
+      "name": "SEARCH_LIMITER",
+      "namespace_id": "1612950",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ]
+}

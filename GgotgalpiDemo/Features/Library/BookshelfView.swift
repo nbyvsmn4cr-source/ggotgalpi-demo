@@ -14,7 +14,6 @@ struct BookshelfView: View {
     @State private var selectedAuthorKey: String?
     @FocusState private var isSearchFieldFocused: Bool
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
-    @AppStorage("ggotgalpi.settings.show-favorite-sentences") private var showsFavoriteSentences = true
 
     private var visibleBooks: [Book] {
         store.books
@@ -100,17 +99,15 @@ struct BookshelfView: View {
                         }
 
                         if !hasSearchTerm {
-                            if showsFavoriteSentences {
-                                NavigationLink {
-                                    FavoriteSentencesView()
-                                } label: {
-                                    FavoriteSentencesShortcut(
-                                        sentenceCount: store.entries.filter { !$0.favoriteSentence.isEmpty }.count
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .simultaneousGesture(TapGesture().onEnded { closeSearch() })
+                            NavigationLink {
+                                FavoriteSentencesView()
+                            } label: {
+                                FavoriteSentencesShortcut(
+                                    sentenceCount: store.entries.filter { !$0.favoriteSentence.isEmpty }.count
+                                )
                             }
+                            .buttonStyle(.plain)
+                            .simultaneousGesture(TapGesture().onEnded { closeSearch() })
 
                             NavigationLink {
                                 AllBooksView()
@@ -619,7 +616,7 @@ struct BookCard: View {
 
     var body: some View {
         HStack(spacing: GgotgalpiTheme.Spacing.control) {
-            BookColorMark(title: book.title, color: book.coverColor)
+            BookColorMark(title: book.title, color: book.coverColor, coverURL: book.coverURL)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(book.title)

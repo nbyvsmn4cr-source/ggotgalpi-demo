@@ -165,6 +165,16 @@ struct CalendarBookCover: View {
     var body: some View {
         coverArtwork
             .frame(width: resolvedSize.width, height: resolvedSize.height)
+            .overlay {
+                if let url = URL(string: book.coverURL), url.scheme == "https" {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        }
+                    }
+                    .frame(width: resolvedSize.width, height: resolvedSize.height)
+                }
+            }
             .shadow(color: .black.opacity(0.06), radius: 1.5, y: 1)
     }
 
