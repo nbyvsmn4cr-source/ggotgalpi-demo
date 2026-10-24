@@ -12,25 +12,37 @@ struct AddBookView: View {
     @State private var showsSearch = false
     @State private var selectedResult: CatalogBook?
     @State private var bookForNewEntry: Book?
+    @State private var showingInitialSearch: Bool
 
-    init(onEntrySaved: (() -> Void)? = nil, onBookAdded: ((Book) -> Void)? = nil, catalogBook: CatalogBook? = nil) {
+    init(onEntrySaved: (() -> Void)? = nil, onBookAdded: ((Book) -> Void)? = nil, catalogBook: CatalogBook? = nil, startsWithSearch: Bool = false) {
         self.onEntrySaved = onEntrySaved
         self.onBookAdded = onBookAdded
         _title = State(initialValue: catalogBook?.title ?? "")
         _author = State(initialValue: catalogBook?.authors.joined(separator: ", ") ?? "")
         _publisher = State(initialValue: catalogBook?.publisher ?? "")
         _selectedResult = State(initialValue: catalogBook)
+        _showingInitialSearch = State(initialValue: startsWithSearch && catalogBook == nil)
     }
 
     var body: some View {
         Group {
             if let bookForNewEntry {
                 AddReadingEntryView(book: bookForNewEntry, editingEntry: nil, onSaved: onEntrySaved)
+            } else if showingInitialSearch {
+                CatalogSearchView(dismissOnSelect: false, focusesSearchOnAppear: true, onManualEntry: {
+                    showingInitialSearch = false
+                }) { result in
+                    title = result.title
+                    author = result.authors.joined(separator: ", ")
+                    publisher = result.publisher
+                    selectedResult = result
+                    showingInitialSearch = false
+                }
             } else {
                 bookForm
             }
         }
-        .presentationDetents(bookForNewEntry == nil ? [.medium, .large] : [.large])
+        .presentationDetents(bookForNewEntry == nil && !showingInitialSearch ? [.medium, .large] : [.large])
         .paperBackground()
     }
 
@@ -151,7 +163,11 @@ struct CatalogCover: View {
 
 private struct CatalogSearchView: View {
     @Environment(\.dismiss) private var dismiss
+    var dismissOnSelect = true
+    var focusesSearchOnAppear = false
+    var onManualEntry: (() -> Void)? = nil
     let onSelect: (CatalogBook) -> Void
+    @FocusState private var searchFocused: Bool
     @State private var query = ""
     @State private var submittedQuery = ""
     @State private var results: [CatalogBook] = []
@@ -169,6 +185,7 @@ private struct CatalogSearchView: View {
                 Section {
                     HStack {
                         TextField("책 제목 또는 ISBN", text: $query)
+                            .focused($searchFocused)
                             .submitLabel(.search)
                             .onSubmit { startSearch() }
                             .autocorrectionDisabled()
@@ -189,7 +206,7 @@ private struct CatalogSearchView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Button {
                             onSelect(book)
-                            dismiss()
+                            if dismissOnSelect { dismiss() }
                         } label: {
                             HStack(spacing: 12) {
                                 CatalogCover(url: book.coverURL)
@@ -220,7 +237,17 @@ private struct CatalogSearchView: View {
             .background(GgotgalpiTheme.paper)
             .navigationTitle("책 검색")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } }
+                if let onManualEntry {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("직접 입력") { onManualEntry() }
+                    }
+                }
+            }
+        }
+        .task {
+            if focusesSearchOnAppear { searchFocused = true }
         }
         .onDisappear { searchTask?.cancel(); requestID = UUID() }
     }
@@ -374,6 +401,51 @@ struct EditBookView: View {
     }
 }
 
+private struct ReadingDateTimePopover: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var date: Date
+    @State var includesTime: Bool
+    @State var start: Date
+    @State var end: Date
+    let onSave: (Date, Bool, Date, Date) -> Void
+
+    private var isValid: Bool { !includesTime || end > start }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("취소") { dismiss() }
+                Spacer()
+                Text("읽은 날짜·시간").font(.headline)
+                Spacer()
+                Button("완료") {
+                    onSave(date, includesTime, start, end)
+                    dismiss()
+                }
+                .disabled(!isValid)
+            }
+            .padding()
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    DatePicker("읽은 날짜", selection: $date, displayedComponents: .date)
+                    Toggle("시작·종료 시간 입력", isOn: $includesTime)
+                    if includesTime {
+                        DatePicker("시작", selection: $start, displayedComponents: [.date, .hourAndMinute])
+                        DatePicker("종료", selection: $end, displayedComponents: [.date, .hourAndMinute])
+                    }
+                    Text(isValid ? "달력에는 읽은 날짜로 표시돼요." : "종료 날짜와 시간은 시작보다 뒤여야 해요.")
+                        .font(.footnote)
+                        .foregroundStyle(isValid ? Color.secondary : Color.red)
+                }
+                .datePickerStyle(.compact)
+                .padding()
+            }
+        }
+        .frame(width: 320, height: 320)
+    }
+}
+
 struct AddReadingEntryView: View {
     private enum WritingField: Hashable {
         case note
@@ -385,6 +457,10 @@ struct AddReadingEntryView: View {
     let book: Book
     let editingEntry: ReadingEntry?
     private let onSaved: (() -> Void)?
+    @AppStorage(DemoStore.readingTimeEnabledKey) private var readingTimeEnabled = false
+    @State private var includesReadingTime = false
+    @State private var readingStartedAt = Date()
+    @State private var readingEndedAt = Date()
     @State private var date = Date()
     @State private var pageFrom = ""
     @State private var pageTo = ""
@@ -396,6 +472,7 @@ struct AddReadingEntryView: View {
     @State private var roundBeforeCompletion: Int?
     @State private var hasInitializedValues = false
     @State private var showingEntryDeletionConfirmation = false
+    @State private var showingReadingDatePopover = false
     @FocusState private var focusedWritingField: WritingField?
 
     init(book: Book, editingEntry: ReadingEntry?, initialDate: Date = Date(), onSaved: (() -> Void)? = nil) {
@@ -407,6 +484,16 @@ struct AddReadingEntryView: View {
 
     private var trimmedFavoriteSentence: String {
         favoriteSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var readingTimeError: String? {
+        guard readingTimeEnabled, includesReadingTime else { return nil }
+        return readingEndedAt > readingStartedAt ? nil : "종료 날짜와 시간은 시작보다 뒤여야 해요."
+    }
+
+    private var savedReadingMinutes: Int? {
+        guard includesReadingTime else { return editingEntry?.readingMinutes }
+        return max(0, Int(readingEndedAt.timeIntervalSince(readingStartedAt) / 60))
     }
 
     private var mostRecentPage: Int? {
@@ -434,7 +521,39 @@ struct AddReadingEntryView: View {
                 Form {
                     StorageErrorSection()
                     Section {
-                        DatePicker("읽은 날짜", selection: $date, displayedComponents: .date)
+                        if readingTimeEnabled {
+                            HStack {
+                                Text("읽은 날짜")
+                                Spacer()
+                                Button {
+                                    focusedWritingField = nil
+                                    showingReadingDatePopover = true
+                                } label: {
+                                    Text(date.shortKoreanDate)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("읽은 날짜와 시간 설정")
+                                .popover(isPresented: $showingReadingDatePopover) {
+                                    ReadingDateTimePopover(
+                                        date: date,
+                                        includesTime: includesReadingTime,
+                                        start: readingStartedAt,
+                                        end: readingEndedAt
+                                    ) { newDate, includesTime, start, end in
+                                        date = newDate
+                                        includesReadingTime = includesTime
+                                        readingStartedAt = start
+                                        readingEndedAt = end
+                                    }
+                                    .presentationCompactAdaptation(.popover)
+                                }
+                            }
+                        } else {
+                            DatePicker("읽은 날짜", selection: $date, displayedComponents: .date)
+                        }
                         Stepper("\(readingRound)회독", value: $readingRound, in: 0...99)
                     }
 
@@ -543,7 +662,11 @@ struct AddReadingEntryView: View {
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
                                     readingRound: readingRound,
-                                    rating: rating
+                                    rating: rating,
+                                    readingMinutes: savedReadingMinutes,
+                                    readingStartedAt: readingStartedAt,
+                                    readingEndedAt: readingEndedAt,
+                                    updatesReadingTime: readingTimeEnabled && includesReadingTime
                                 )
                             } else {
                                 store.addEntry(
@@ -554,7 +677,10 @@ struct AddReadingEntryView: View {
                                     note: note.isEmpty ? "새로운 감상을 기록했어요." : note,
                                     favoriteSentence: trimmedFavoriteSentence,
                                     readingRound: readingRound,
-                                    rating: rating
+                                    rating: rating,
+                                    readingMinutes: readingTimeEnabled && includesReadingTime ? savedReadingMinutes : nil,
+                                    readingStartedAt: readingTimeEnabled && includesReadingTime ? readingStartedAt : nil,
+                                    readingEndedAt: readingTimeEnabled && includesReadingTime ? readingEndedAt : nil
                                 )
                             }
 
@@ -566,7 +692,7 @@ struct AddReadingEntryView: View {
                             onSaved?()
                             dismiss()
                         }
-                        .disabled(pageValidationError != nil)
+                        .disabled(pageValidationError != nil || readingTimeError != nil)
                     }
 
                     if editingEntry != nil {
@@ -612,6 +738,11 @@ struct AddReadingEntryView: View {
             } else if book.readingStatus == .reading, let mostRecentPage {
                 pageFrom = String(mostRecentPage)
             }
+            let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
+            let suggestedEnd = Calendar.current.date(bySettingHour: now.hour ?? 12, minute: now.minute ?? 0, second: 0, of: date) ?? date
+            readingEndedAt = editingEntry?.readingEndedAt ?? suggestedEnd
+            readingStartedAt = editingEntry?.readingStartedAt ?? readingEndedAt.addingTimeInterval(-1800)
+            includesReadingTime = editingEntry == nil || editingEntry?.readingStartedAt != nil
         }
     }
 

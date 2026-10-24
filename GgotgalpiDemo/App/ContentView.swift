@@ -114,6 +114,9 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if !isShowingSettingsDetail {
                 tabDock
+                    // 본문은 키보드를 피하고, 독 바만 화면 아래에 고정합니다.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .tint(GgotgalpiTheme.accent)
@@ -407,6 +410,7 @@ struct SettingsView: View {
     let panelWidth: CGFloat
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
     @AppStorage("ggotgalpi.settings.show-publisher") private var showsPublisher = true
+    @AppStorage(DemoStore.readingTimeEnabledKey) private var readingTimeEnabled = false
     @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var isShowingTrash = false
     @State private var showingTrashRetentionOptions = false
@@ -422,6 +426,8 @@ struct SettingsView: View {
                     }
 
                     Toggle("출판사 표시", isOn: $showsPublisher)
+                        .tint(GgotgalpiTheme.toggleTint)
+                    Toggle("읽은 시간 기록", isOn: $readingTimeEnabled)
                         .tint(GgotgalpiTheme.toggleTint)
                 } header: {
                     Text("꽃갈피")

@@ -765,7 +765,7 @@ private struct CalendarDayEntriesSheet: View {
             }) {
                 AddBookView(onBookAdded: { book in
                     newlyAddedBook = book
-                })
+                }, startsWithSearch: true)
             }
             .sheet(item: $bookForNewEntry) { book in
                 AddReadingEntryView(book: book, editingEntry: nil, initialDate: date)

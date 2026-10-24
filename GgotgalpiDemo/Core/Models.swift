@@ -91,6 +91,9 @@ final class ReadingEntry {
     var favoriteSentence: String = ""
     var isFavoriteReview: Bool = false
     var readingRound: Int = 0
+    var readingMinutes: Int? = nil
+    var readingStartedAt: Date? = nil
+    var readingEndedAt: Date? = nil
     // 기존 정수 별점 필드는 유지해 저장된 기록을 그대로 읽습니다.
     var rating: Int = 0
     var hasHalfStar: Bool = false
@@ -117,6 +120,9 @@ final class ReadingEntry {
         favoriteSentence: String = "",
         readingRound: Int,
         rating: Double = 0,
+        readingMinutes: Int? = nil,
+        readingStartedAt: Date? = nil,
+        readingEndedAt: Date? = nil,
         deletedAt: Date? = nil
     ) {
         self.id = id
@@ -129,6 +135,9 @@ final class ReadingEntry {
         self.note = note
         self.favoriteSentence = favoriteSentence
         self.readingRound = readingRound
+        self.readingMinutes = readingMinutes
+        self.readingStartedAt = readingStartedAt
+        self.readingEndedAt = readingEndedAt
         self.deletedAt = deletedAt
         self.ratingValue = rating
     }
@@ -155,6 +164,7 @@ enum ReadingRating {
 @MainActor
 final class DemoStore: ObservableObject {
     static let trashRetentionDaysKey = "ggotgalpi.settings.trash-retention-days"
+    static let readingTimeEnabledKey = "ggotgalpi.settings.reading-time-enabled"
     static let defaultTrashRetentionDays = 30
     private static let favoriteAuthorsKey = "ggotgalpi.favorite-authors.v1"
 
@@ -266,7 +276,10 @@ final class DemoStore: ObservableObject {
         note: String,
         favoriteSentence: String = "",
         readingRound: Int,
-        rating: Double = 0
+        rating: Double = 0,
+        readingMinutes: Int? = nil,
+        readingStartedAt: Date? = nil,
+        readingEndedAt: Date? = nil
     ) {
         guard let book = book(for: bookID) else { return }
         modelContext.insert(
@@ -278,7 +291,10 @@ final class DemoStore: ObservableObject {
                 note: note,
                 favoriteSentence: favoriteSentence,
                 readingRound: readingRound,
-                rating: rating
+                rating: rating,
+                readingMinutes: readingMinutes,
+                readingStartedAt: readingStartedAt,
+                readingEndedAt: readingEndedAt
             )
         )
         saveChanges()
@@ -292,7 +308,11 @@ final class DemoStore: ObservableObject {
         note: String,
         favoriteSentence: String = "",
         readingRound: Int,
-        rating: Double = 0
+        rating: Double = 0,
+        readingMinutes: Int? = nil,
+        readingStartedAt: Date? = nil,
+        readingEndedAt: Date? = nil,
+        updatesReadingTime: Bool = false
     ) {
         guard let entry = entries.first(where: { $0.id == id }) else { return }
         entry.date = date
@@ -302,6 +322,11 @@ final class DemoStore: ObservableObject {
         entry.favoriteSentence = favoriteSentence
         entry.readingRound = readingRound
         entry.ratingValue = rating
+        if updatesReadingTime {
+            entry.readingMinutes = readingMinutes
+            entry.readingStartedAt = readingStartedAt
+            entry.readingEndedAt = readingEndedAt
+        }
         saveChanges()
     }
 
