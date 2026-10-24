@@ -31,11 +31,25 @@ struct PersistenceRegression {
         precondition(store.averageRating(for: book.id) == nil)
         store.restoreEntry(id: entryID)
         precondition(store.entries.count == 1 && store.trashedEntries.isEmpty)
+        // Trashing clears the representative flag; set it again before testing replacement.
+        if !store.entries[0].isFavoriteReview { store.toggleFavoriteReview(id: entryID) }
+        store.updateBook(id: book.id, title: "온라인 책 정보", author: "온라인 작가", publisher: "출판사",
+                         category: book.category, readingStatus: book.readingStatus,
+                         isHiddenFromCalendar: book.isHiddenFromCalendar,
+                         isbn: "9780000000002", coverURL: "https://example.com/replaced.jpg")
+        precondition(store.storageError == nil)
+        precondition(store.books.count == 1 && store.entries[0].id == entryID)
+        precondition(store.entries[0].isFavoriteReview && store.entries[0].date == chosenDate)
+        // Ordinary manual edits must not clear the linked catalog metadata.
+        store.updateBook(id: book.id, title: "수정한 제목", author: book.author, publisher: book.publisher,
+                         category: book.category, readingStatus: book.readingStatus,
+                         isHiddenFromCalendar: book.isHiddenFromCalendar)
         let reopened = try ModelContainer(for: schema, configurations: [configuration])
         let reloaded = DemoStore(modelContext: reopened.mainContext)
         precondition(reloaded.books.count == 1 && reloaded.entries.count == 1)
-        precondition(reloaded.books[0].isbn == "9788996991342")
-        precondition(reloaded.books[0].coverURL == "https://example.com/cover.jpg")
+        precondition(reloaded.books[0].title == "수정한 제목")
+        precondition(reloaded.books[0].isbn == "9780000000002")
+        precondition(reloaded.books[0].coverURL == "https://example.com/replaced.jpg")
         precondition(reloaded.entries[0].note == "영구 저장 확인")
         precondition(reloaded.entries[0].ratingValue == 0.5)
         precondition(reloaded.entries[0].book?.id == book.id)

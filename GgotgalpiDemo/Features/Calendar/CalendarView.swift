@@ -15,6 +15,7 @@ struct CalendarView: View {
     @State private var recentEntryRequest: CalendarDayEntryEditRequest?
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
+    @State private var catalogQuery = ""
     @FocusState private var isSearchFieldFocused: Bool
 
     private func matchesCalendarFilters(_ entry: ReadingEntry) -> Bool {
@@ -102,6 +103,8 @@ struct CalendarView: View {
                         if isSearchExpanded {
                             InlineUnifiedSearchView(
                                 query: $searchQuery,
+                                catalogQuery: catalogQuery,
+                                onEntrySaved: closeSearch,
                                 bookMatchesFilter: matchesCalendarFilters
                             )
                                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -305,6 +308,11 @@ struct CalendarView: View {
             }
 
             TextField("책, 감상문, 연도 또는 월", text: $searchQuery)
+                .onSubmit {
+                    catalogQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                    isSearchFieldFocused = false
+                }
+                .onChange(of: searchQuery) { _, _ in catalogQuery = "" }
                 .textFieldStyle(.plain)
                 .font(.doveMayo(.subheadline))
                 .focused($isSearchFieldFocused)
@@ -755,9 +763,9 @@ private struct CalendarDayEntriesSheet: View {
                 self.newlyAddedBook = nil
                 bookForNewEntry = newlyAddedBook
             }) {
-                AddBookView { book in
+                AddBookView(onBookAdded: { book in
                     newlyAddedBook = book
-                }
+                })
             }
             .sheet(item: $bookForNewEntry) { book in
                 AddReadingEntryView(book: book, editingEntry: nil, initialDate: date)

@@ -11,6 +11,7 @@ struct BookshelfView: View {
     @State private var selectedBook: Book?
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
+    @State private var catalogQuery = ""
     @State private var selectedAuthorKey: String?
     @FocusState private var isSearchFieldFocused: Bool
     @AppStorage("ggotgalpi.settings.bookshelf-sort-order") private var bookshelfSortOrder = BookshelfSortOption.recentEntry.rawValue
@@ -93,6 +94,8 @@ struct BookshelfView: View {
                         if isSearchExpanded {
                             InlineUnifiedSearchView(
                                 query: $searchQuery,
+                                catalogQuery: catalogQuery,
+                                onEntrySaved: closeSearch,
                                 bookMatchesFilter: matchesBookshelfFilters
                             )
                                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -342,6 +345,11 @@ struct BookshelfView: View {
             }
 
             TextField("책, 감상문, 연도 또는 월", text: $searchQuery)
+                .onSubmit {
+                    catalogQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+                    isSearchFieldFocused = false
+                }
+                .onChange(of: searchQuery) { _, _ in catalogQuery = "" }
                 .textFieldStyle(.plain)
                 .font(.doveMayo(.subheadline))
                 .focused($isSearchFieldFocused)

@@ -403,7 +403,9 @@ final class DemoStore: ObservableObject {
         publisher: String,
         category: BookCategory,
         readingStatus: ReadingStatus,
-        isHiddenFromCalendar: Bool
+        isHiddenFromCalendar: Bool,
+        isbn: String? = nil,
+        coverURL: String? = nil
     ) {
         guard let book = book(for: id) else { return }
         book.title = title
@@ -412,6 +414,8 @@ final class DemoStore: ObservableObject {
         book.category = category
         book.readingStatus = readingStatus
         book.isHiddenFromCalendar = isHiddenFromCalendar
+        if let isbn { book.isbn = isbn }
+        if let coverURL { book.coverURL = coverURL }
         saveChanges()
     }
 

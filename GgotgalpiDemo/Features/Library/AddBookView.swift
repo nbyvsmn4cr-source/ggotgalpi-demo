@@ -4,14 +4,37 @@ struct AddBookView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: DemoStore
     var onBookAdded: ((Book) -> Void)? = nil
+    private let onEntrySaved: (() -> Void)?
     @State private var title = ""
     @State private var author = ""
     @State private var publisher = ""
     @State private var category: BookCategory = .literature
     @State private var showsSearch = false
     @State private var selectedResult: CatalogBook?
+    @State private var bookForNewEntry: Book?
+
+    init(onEntrySaved: (() -> Void)? = nil, onBookAdded: ((Book) -> Void)? = nil, catalogBook: CatalogBook? = nil) {
+        self.onEntrySaved = onEntrySaved
+        self.onBookAdded = onBookAdded
+        _title = State(initialValue: catalogBook?.title ?? "")
+        _author = State(initialValue: catalogBook?.authors.joined(separator: ", ") ?? "")
+        _publisher = State(initialValue: catalogBook?.publisher ?? "")
+        _selectedResult = State(initialValue: catalogBook)
+    }
 
     var body: some View {
+        Group {
+            if let bookForNewEntry {
+                AddReadingEntryView(book: bookForNewEntry, editingEntry: nil, onSaved: onEntrySaved)
+            } else {
+                bookForm
+            }
+        }
+        .presentationDetents(bookForNewEntry == nil ? [.medium, .large] : [.large])
+        .paperBackground()
+    }
+
+    private var bookForm: some View {
         NavigationStack {
             Form {
                 StorageErrorSection()
@@ -63,8 +86,17 @@ struct AddBookView: View {
                         let book = store.addBook(title: title.trimmingCharacters(in: .whitespacesAndNewlines), author: author, publisher: publisher, category: category,
                                                  isbn: selectedResult?.isbn ?? "", coverURL: selectedResult?.coverURL?.absoluteString ?? "")
                         guard store.storageError == nil else { return }
-                        dismiss()
-                        onBookAdded?(book)
+                        if let onBookAdded {
+                            // Date-specific calendar flows own their selected reading date.
+                            onBookAdded(book)
+                            dismiss()
+                        } else if selectedResult != nil {
+                            // Replace this sheet's content instead of racing dismissal
+                            // against presentation of a second sheet.
+                            bookForNewEntry = book
+                        } else {
+                            dismiss()
+                        }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -78,12 +110,11 @@ struct AddBookView: View {
                 selectedResult = result
             }
         }
-        .presentationDetents([.medium, .large])
-        .paperBackground()
     }
 }
 
-private struct CatalogBook: Decodable {
+struct CatalogBook: Decodable, Identifiable {
+    var id: String { isbn + "|" + url + "|" + title }
     let title: String
     let authors: [String]
     let publisher: String
@@ -100,12 +131,12 @@ private struct CatalogBook: Decodable {
     }
 }
 
-private struct CatalogPage: Decodable {
+struct CatalogPage: Decodable {
     let books: [CatalogBook]
     let isEnd: Bool
 }
 
-private struct CatalogCover: View {
+struct CatalogCover: View {
     let url: URL?
     var body: some View {
         AsyncImage(url: url) { image in
@@ -251,6 +282,8 @@ struct EditBookView: View {
     @State private var category: BookCategory
     @State private var readingStatus: ReadingStatus
     @State private var isHiddenFromCalendar: Bool
+    @State private var showsSearch = false
+    @State private var selectedResult: CatalogBook?
 
     init(book: Book) {
         self.book = book
@@ -267,6 +300,20 @@ struct EditBookView: View {
             Form {
                 StorageErrorSection()
                 Section("책 정보") {
+                    Button {
+                        showsSearch = true
+                    } label: {
+                        Label("온라인 검색으로 책 정보 바꾸기", systemImage: "magnifyingglass")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    if let selectedResult {
+                        HStack(spacing: 12) {
+                            CatalogCover(url: selectedResult.coverURL)
+                            Text("저장하면 제목·작가·출판사·ISBN·표지가 변경돼요. 기존 감상 기록은 그대로 유지돼요.")
+                                .font(.doveMayo(.caption))
+                        }
+                    }
                     TextField("책 제목", text: $title)
                     TextField("작가", text: $author)
                     TextField("출판사", text: $publisher)
@@ -303,13 +350,23 @@ struct EditBookView: View {
                             publisher: publisher,
                             category: category,
                             readingStatus: readingStatus,
-                            isHiddenFromCalendar: isHiddenFromCalendar
+                            isHiddenFromCalendar: isHiddenFromCalendar,
+                            isbn: selectedResult?.isbn,
+                            coverURL: selectedResult.map { $0.coverURL?.absoluteString ?? "" }
                         )
                         guard store.storageError == nil else { return }
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+            }
+        }
+        .sheet(isPresented: $showsSearch) {
+            CatalogSearchView { result in
+                title = result.title
+                author = result.authors.joined(separator: ", ")
+                publisher = result.publisher
+                selectedResult = result
             }
         }
         .presentationDetents([.large])
@@ -327,6 +384,7 @@ struct AddReadingEntryView: View {
     @EnvironmentObject private var store: DemoStore
     let book: Book
     let editingEntry: ReadingEntry?
+    private let onSaved: (() -> Void)?
     @State private var date = Date()
     @State private var pageFrom = ""
     @State private var pageTo = ""
@@ -340,9 +398,10 @@ struct AddReadingEntryView: View {
     @State private var showingEntryDeletionConfirmation = false
     @FocusState private var focusedWritingField: WritingField?
 
-    init(book: Book, editingEntry: ReadingEntry?, initialDate: Date = Date()) {
+    init(book: Book, editingEntry: ReadingEntry?, initialDate: Date = Date(), onSaved: (() -> Void)? = nil) {
         self.book = book
         self.editingEntry = editingEntry
+        self.onSaved = onSaved
         _date = State(initialValue: Calendar.current.startOfDay(for: initialDate))
     }
 
@@ -504,6 +563,7 @@ struct AddReadingEntryView: View {
                                 store.markBookAsFinished(id: book.id)
                             }
                             guard store.storageError == nil else { return }
+                            onSaved?()
                             dismiss()
                         }
                         .disabled(pageValidationError != nil)
