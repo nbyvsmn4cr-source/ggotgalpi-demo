@@ -55,7 +55,8 @@ struct ContentView: View {
                     CalendarView(
                         searchResetID: calendarSearchResetID,
                         pastHighlightRefreshID: calendarPastHighlightRefreshID,
-                        scrollToTopID: calendarScrollToTopID
+                        scrollToTopID: calendarScrollToTopID,
+                        showsSearchAndFilterControls: !showsBothPages
                     )
                         .padding(.top, showsBothPages ? 20 : 0)
                         .frame(width: paneWidth, height: proxy.size.height)
@@ -151,10 +152,21 @@ struct ContentView: View {
         .font(.doveMayo(.body))
         .overlay(alignment: .bottom) {
             if !isShowingSettingsDetail {
-                tabDock
-                    // 본문은 키보드를 피하고, 독 바만 화면 아래에 고정합니다.
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                GeometryReader { proxy in
+                    if proxy.size.width >= 700 {
+                        floatingSettingsButton
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 16)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            // Only this control extends into the lower end of the side strip.
+                            .offset(x: proxy.safeAreaInsets.trailing)
+                    } else {
+                        tabDock
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    }
+                }
+                // Keep the bottom controls fixed when the keyboard appears.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
         .tint(GgotgalpiTheme.accent)
@@ -357,22 +369,41 @@ struct ContentView: View {
     }
 
     private var settingsDockButton: some View {
-        Button {
-            resetSearches()
-            withAnimation(.easeInOut(duration: 0.32)) {
-                if isShowingSettings {
-                    isShowingSettingsDetail = false
-                }
-                isShowingSettings.toggle()
-                interactiveOffset = 0
-            }
-        } label: {
+        Button(action: toggleSettings) {
             tabPickerLabel(title: "설정", symbol: "gearshape", isSelected: isShowingSettings)
                 .frame(width: 76, height: 44)
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isShowingSettings ? "설정 닫기" : "설정")
+    }
+
+    private var floatingSettingsButton: some View {
+        Button(action: toggleSettings) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(GgotgalpiTheme.ink)
+                .frame(width: 52, height: 52)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .background {
+            if #available(iOS 26.0, *) {
+                Circle().fill(.clear).glassEffect(.regular, in: Circle())
+            } else {
+                Circle().fill(.regularMaterial)
+            }
+        }
+        .accessibilityLabel(isShowingSettings ? "설정 닫기" : "설정")
+    }
+
+    private func toggleSettings() {
+        resetSearches()
+        withAnimation(.easeInOut(duration: 0.32)) {
+            if isShowingSettings { isShowingSettingsDetail = false }
+            isShowingSettings.toggle()
+            interactiveOffset = 0
+        }
     }
 
     private func tabPickerLabel(title: String, symbol: String, isSelected: Bool) -> some View {

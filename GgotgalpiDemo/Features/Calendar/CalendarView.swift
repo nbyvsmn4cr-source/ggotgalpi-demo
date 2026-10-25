@@ -5,6 +5,7 @@ struct CalendarView: View {
     let searchResetID: Int
     let pastHighlightRefreshID: Int
     let scrollToTopID: Int
+    var showsSearchAndFilterControls = true
     @State private var selectedDate = Calendar.current.startOfDay(for: Date())
     @State private var displayedMonth = Calendar.current.startOfMonth(for: Date())
     @State private var selectedReadingStatus: ReadingStatus = .all
@@ -171,11 +172,13 @@ struct CalendarView: View {
             }
             .scrollIndicators(.hidden)
             .overlay(alignment: .top) {
-                calendarActions
-                    // 확장된 캡슐은 이 여백 안의 전체 폭을 사용합니다.
-                    // 따라서 leading / trailing 여백은 항상 동일합니다.
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, GgotgalpiTheme.Spacing.screen)
+                if showsSearchAndFilterControls {
+                    calendarActions
+                        // 확장된 캡슐은 이 여백 안의 전체 폭을 사용합니다.
+                        // 따라서 leading / trailing 여백은 항상 동일합니다.
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, GgotgalpiTheme.Spacing.screen)
+                }
             }
             .overlay(alignment: .topLeading) {
                 if !isDisplayingCurrentMonth && !isSearchExpanded {
@@ -197,6 +200,12 @@ struct CalendarView: View {
         .paperBackground()
         .onChange(of: searchResetID) {
             closeSearch()
+        }
+        .onChange(of: showsSearchAndFilterControls) { _, showsControls in
+            if !showsControls {
+                closeSearch()
+                isShowingFilters = false
+            }
         }
         .sheet(item: $recentEntryRequest) { request in
             AddReadingEntryView(book: request.book, editingEntry: request.entry)
