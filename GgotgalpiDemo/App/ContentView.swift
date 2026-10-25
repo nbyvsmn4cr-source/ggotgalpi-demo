@@ -46,28 +46,50 @@ struct ContentView: View {
 
             GeometryReader { proxy in
                 let pageWidth = proxy.size.width
+                let showsBothPages = pageWidth >= 700
+                // A folded display reserves a side strip for system controls as well.
+                let usesPaneNavigation = showsBothPages || proxy.safeAreaInsets.trailing > 40 || proxy.safeAreaInsets.leading > 40
+                let paneWidth = showsBothPages ? pageWidth / 2 : pageWidth
 
-                ZStack {
+                ZStack(alignment: .leading) {
                     CalendarView(
                         searchResetID: calendarSearchResetID,
                         pastHighlightRefreshID: calendarPastHighlightRefreshID,
                         scrollToTopID: calendarScrollToTopID
                     )
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .offset(x: calendarOffset(pageWidth: pageWidth))
+                        .padding(.top, showsBothPages ? 20 : 0)
+                        .frame(width: paneWidth, height: proxy.size.height)
+                        .clipped()
+                        .offset(x: showsBothPages ? 0 : calendarOffset(pageWidth: pageWidth))
 
                     BookshelfView(
                         searchResetID: bookshelfSearchResetID,
                         scrollToTopID: bookshelfScrollToTopID
                     )
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .offset(x: bookshelfOffset(pageWidth: pageWidth))
+                        .environment(\.usesSplitPaneNavigation, usesPaneNavigation)
+                        .padding(.top, showsBothPages ? 20 : 0)
+                        .frame(width: paneWidth, height: proxy.size.height)
+                        .clipped()
+                        .allowsHitTesting(!showsBothPages || !isShowingSettings)
+                        .accessibilityHidden(showsBothPages && isShowingSettings)
+                        .offset(x: showsBothPages ? paneWidth : bookshelfOffset(pageWidth: pageWidth))
+
+                    if showsBothPages {
+                        Rectangle()
+                            .fill(.gray.opacity(0.2))
+                            .frame(width: 1)
+                            .offset(x: paneWidth)
+                            .allowsHitTesting(false)
+                    }
 
                     SettingsView(
                         isShowingDetail: $isShowingSettingsDetail,
-                        panelWidth: isShowingSettingsDetail ? proxy.size.width : proxy.size.width * 4 / 5
+                        panelWidth: showsBothPages || isShowingSettingsDetail ? paneWidth : paneWidth * 4 / 5
                     )
-                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .environment(\.usesSplitPaneNavigation, usesPaneNavigation)
+                    .padding(.top, showsBothPages ? 20 : 0)
+                    .background(showsBothPages ? GgotgalpiTheme.surface : Color.clear)
+                    .frame(width: paneWidth, height: proxy.size.height)
                     .overlay(alignment: .leading) {
                         Rectangle()
                             .fill(
@@ -84,16 +106,22 @@ struct ContentView: View {
                             )
                             .frame(width: 1)
                             .shadow(color: .black.opacity(0.14), radius: 10, x: -4)
-                            .offset(x: proxy.size.width / 5)
-                            .opacity(isShowingSettingsDetail ? 0 : 1)
+                            .offset(x: showsBothPages ? 0 : paneWidth / 5)
+                            .opacity(!showsBothPages && isShowingSettingsDetail ? 0 : 1)
                     }
-                    .offset(x: settingsPanelOffset(pageWidth: pageWidth))
+                    .clipped()
+                    .offset(x: showsBothPages
+                            ? (isShowingSettings ? paneWidth : pageWidth)
+                            : settingsPanelOffset(pageWidth: pageWidth))
+                    .allowsHitTesting(isShowingSettings)
+                    .accessibilityHidden(!isShowingSettings)
                     .animation(.easeInOut(duration: 0.28), value: isShowingSettingsDetail)
                     .animation(.easeInOut(duration: 0.32), value: isShowingSettings)
                 }
+                .frame(width: pageWidth, height: proxy.size.height, alignment: .leading)
                 .clipped()
                 .overlay(alignment: .leading) {
-                    if isShowingSettings && !isShowingSettingsDetail {
+                    if !showsBothPages && isShowingSettings && !isShowingSettingsDetail {
                         Color.clear
                             .frame(width: pageWidth / 5)
                             .frame(maxHeight: .infinity)
@@ -104,11 +132,16 @@ struct ContentView: View {
                     }
                 }
                 .overlay(alignment: selectedTab == .calendar ? .trailing : .leading) {
-                    if !isShowingSettings {
+                    if !showsBothPages && !isShowingSettings {
                         edgeSwipeArea(pageWidth: pageWidth)
                             // Reserve the top controls for taps, not page-swiping gestures.
                             .padding(.top, proxy.safeAreaInsets.top + 96)
                     }
+                }
+                .onChange(of: showsBothPages) { _, _ in
+                    interactiveOffset = 0
+                    isInteractiveSwipe = false
+                    resetSearches()
                 }
             }
         }

@@ -212,6 +212,7 @@ struct BookDetailView: View {
             }
         }
         .paperBackground()
+        .paneBackButton()
     }
 }
 

@@ -544,6 +544,7 @@ private struct AllBooksView: View {
         .background(GgotgalpiTheme.calendarCanvas)
         .navigationTitle("나의 책장")
         .navigationBarTitleDisplayMode(.inline)
+        .paneBackButton(title: "나의 책장")
     }
 }
 
@@ -589,6 +590,7 @@ private struct FavoriteAuthorsView: View {
         .background(GgotgalpiTheme.calendarCanvas)
         .navigationTitle("좋아하는 작가")
         .navigationBarTitleDisplayMode(.inline)
+        .paneBackButton(title: "좋아하는 작가")
     }
 
     private func books(for author: FavoriteAuthor) -> [Book] {

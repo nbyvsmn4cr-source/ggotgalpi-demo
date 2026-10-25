@@ -180,6 +180,7 @@ struct TrashView: View {
         .scrollIndicators(.hidden)
         .navigationTitle("휴지통")
         .navigationBarTitleDisplayMode(.inline)
+        .paneBackButton(title: "휴지통")
         .background(GgotgalpiTheme.calendarCanvas.ignoresSafeArea())
         .task {
             store.purgeExpiredEntries()
@@ -316,6 +317,7 @@ struct FavoriteSentencesView: View {
         .scrollIndicators(.hidden)
         .navigationTitle("마음에 드는 문장")
         .navigationBarTitleDisplayMode(.inline)
+        .paneBackButton(title: "마음에 드는 문장")
         .paperBackground()
     }
 }

@@ -1,4 +1,73 @@
 import SwiftUI
+
+private struct SplitPaneNavigationKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var usesSplitPaneNavigation: Bool {
+        get { self[SplitPaneNavigationKey.self] }
+        set { self[SplitPaneNavigationKey.self] = newValue }
+    }
+}
+
+private struct PaneBackButton: ViewModifier {
+    let title: String?
+    @Environment(\.usesSplitPaneNavigation) private var usesSplitPaneNavigation
+    @Environment(\.dismiss) private var dismiss
+
+    func body(content: Content) -> some View {
+        content
+            .navigationBarBackButtonHidden(usesSplitPaneNavigation)
+            .toolbar(usesSplitPaneNavigation && title != nil ? .hidden : .automatic, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if usesSplitPaneNavigation {
+                    ZStack {
+                        if let title {
+                            Text(title)
+                                .font(.system(size: 17, weight: .semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 60)
+                                .frame(maxWidth: .infinity)
+                        }
+                        HStack {
+                        Button { dismiss() } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .frame(width: 44, height: 44)
+                                .contentShape(Circle())
+                        }
+                        .modifier(PaneBackButtonStyle())
+                        .accessibilityLabel("뒤로가기")
+                        Spacer()
+                        }
+                    }
+                    .foregroundStyle(GgotgalpiTheme.ink)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(GgotgalpiTheme.calendarCanvas)
+                }
+            }
+    }
+}
+
+private struct PaneBackButtonStyle: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.plain).glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            content.buttonStyle(.plain).background(.regularMaterial, in: Circle())
+        }
+    }
+}
+
+extension View {
+    /// Keep the back action inside the pane rather than the window-level navigation bar.
+    func paneBackButton(title: String? = nil) -> some View {
+        modifier(PaneBackButton(title: title))
+    }
+}
 import UIKit
 
 extension Font {
