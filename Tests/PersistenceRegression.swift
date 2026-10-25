@@ -80,6 +80,40 @@ struct PersistenceRegression {
         precondition(store.books.isEmpty && store.entries.isEmpty)
         let empty = DemoStore(modelContext: container.mainContext)
         precondition(empty.books.isEmpty, "Deleted books must not reappear as sample data")
+        let original = store.addBook(title: "인간 실격", author: "다자이 오사무", category: .literature, isbn: "9788937461033")
+        let reused = store.addBook(title: "인간실격", author: "다자이오사무", category: .literature, isbn: "893746103X 9788937461033")
+        precondition(original.id == reused.id && store.books.count == 1)
+        let manual = Book(title: "인간실격", author: "다자이 오사무", category: .literature)
+        let duplicate = Book(title: "인간 실격", author: "다자이 오사무", category: .literature)
+        duplicate.isbn = "9788937461033"
+        container.mainContext.insert(manual)
+        container.mainContext.insert(duplicate)
+        let active = ReadingEntry(book: manual, date: chosenDate, pageFrom: 1, pageTo: 10,
+                                  note: "합치기 보존", favoriteSentence: "문장", readingRound: 2, rating: 4.5,
+                                  readingMinutes: 90, readingStartedAt: startedAt, readingEndedAt: endedAt)
+        active.isFavoriteReview = true
+        let trashed = ReadingEntry(book: duplicate, date: chosenDate, pageFrom: 11, pageTo: 20,
+                                   note: "휴지통 보존", readingRound: 2, deletedAt: Date())
+        container.mainContext.insert(active)
+        container.mainContext.insert(trashed)
+        try container.mainContext.save()
+        store.mergeDuplicateBooks()
+        precondition(store.storageError == nil && store.books.count == 1)
+        precondition(store.entries.count == 1 && store.trashedEntries.count == 1)
+        precondition(active.bookID == store.books[0].id && trashed.bookID == store.books[0].id)
+        precondition(active.note == "합치기 보존" && active.isFavoriteReview && active.ratingValue == 4.5)
+        precondition(active.readingStartedAt == startedAt && active.readingEndedAt == endedAt)
+        store.mergeDuplicateBooks()
+        precondition(store.books.count == 1 && store.entries.count == 1)
+        let mergedContainer = try ModelContainer(for: schema, configurations: [configuration])
+        let mergedStore = DemoStore(modelContext: mergedContainer.mainContext)
+        precondition(mergedStore.entries.count == 1 && mergedStore.trashedEntries.count == 1)
+        precondition(mergedStore.entries[0].book?.id == mergedStore.books[0].id)
+        let otherEdition = store.addBook(title: "인간 실격", author: "다자이 오사무", category: .literature, isbn: "9780000000002")
+        precondition(otherEdition.id != store.books[0].id || store.books.count == 2)
+        precondition(store.books.count == 2)
+        precondition(store.matchingBook(title: "인간실격", author: "다자이오사무", isbn: "") == nil,
+                     "Ambiguous editions must not be merged by title")
         print("PASS: empty install, selected date, half-star, favorite, trash/restore, disk reload, expiry, cascade, no reseeding")
         print("Temporary test store: \(directory.path)")
     }

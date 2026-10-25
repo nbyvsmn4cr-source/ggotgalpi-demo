@@ -50,7 +50,9 @@ enum GgotgalpiTheme {
     static let surface = adaptive(.white, dark: 0.12)
     static let favoriteAuthorCard = surface
     static let favoriteAuthorSelected = adaptive(UIColor(white: 0.90, alpha: 1), dark: 0.25)
-    static let toggleTint = adaptive(UIColor(white: 0.28, alpha: 1), dark: 0.40)
+    // Dark-mode ON uses a bright neutral track, distinct from the system's dark OFF track.
+    // Keep the existing charcoal tint in light mode.
+    static let toggleTint = adaptive(UIColor(white: 0.28, alpha: 1), dark: 0.78)
 
     enum Spacing {
         static let compact: CGFloat = 8

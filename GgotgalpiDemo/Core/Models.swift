@@ -189,6 +189,7 @@ final class DemoStore: ObservableObject {
         favoriteAuthorKeys = Set(UserDefaults.standard.stringArray(forKey: Self.favoriteAuthorsKey) ?? [])
         loadCalendarBookOrders()
         refresh()
+        mergeDuplicateBooks()
         purgeExpiredEntries()
 
         // 원격 가져오기가 끝나면 수동으로 관리하는 화면 목록도 다시 읽습니다.
@@ -198,6 +199,7 @@ final class DemoStore: ObservableObject {
                 guard let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event,
                     event.type == .import, event.endDate != nil, event.succeeded else { return }
+                self?.mergeDuplicateBooks()
                 self?.refresh()
             }
     }
@@ -254,6 +256,13 @@ final class DemoStore: ObservableObject {
 
     @discardableResult
     func addBook(title: String, author: String, publisher: String = "", category: BookCategory, isbn: String = "", coverURL: String = "") -> Book {
+        if let existing = matchingBook(title: title, author: author, isbn: isbn) {
+            if existing.isbn.isEmpty { existing.isbn = isbn }
+            if existing.coverURL.isEmpty { existing.coverURL = coverURL }
+            if existing.publisher.isEmpty { existing.publisher = publisher }
+            saveChanges()
+            return existing
+        }
         let book = Book(
             title: title,
             author: author,
@@ -266,6 +275,97 @@ final class DemoStore: ObservableObject {
         modelContext.insert(book)
         saveChanges()
         return book
+    }
+
+    private static func identityText(_ value: String) -> String {
+        value.precomposedStringWithCanonicalMapping
+            .folding(options: [.caseInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .filter { !$0.isWhitespace }
+    }
+
+    private static func isbnKeys(_ value: String) -> Set<String> {
+        Set(value.split(whereSeparator: { $0.isWhitespace }).compactMap { token in
+            let raw = token.uppercased().filter { $0.isNumber || $0 == "X" }
+            if raw.count == 13, raw.allSatisfy({ $0.isASCII && $0.isNumber }) { return raw }
+            if raw.count == 10, raw.prefix(9).allSatisfy({ $0.isASCII && $0.isNumber }) {
+                let prefix = "978" + raw.prefix(9)
+                let sum = prefix.enumerated().reduce(0) { $0 + ($1.element.wholeNumberValue ?? 0) * ($1.offset.isMultiple(of: 2) ? 1 : 3) }
+                return prefix + String((10 - sum % 10) % 10)
+            }
+            return nil
+        })
+    }
+
+    func matchingBook(title: String, author: String, isbn: String) -> Book? {
+        matchingBook(in: books, title: title, author: author, isbn: isbn)
+    }
+
+    private func matchingBook(in candidates: [Book], title: String, author: String, isbn: String) -> Book? {
+        let identifiers = Self.isbnKeys(isbn)
+        let ordered = candidates.sorted { $0.id.uuidString < $1.id.uuidString }
+        if !identifiers.isEmpty,
+           let exact = ordered.first(where: { !identifiers.isDisjoint(with: Self.isbnKeys($0.isbn)) }) {
+            return exact
+        }
+        let titleKey = Self.identityText(title)
+        let authorKey = Self.identityText(author)
+        guard !titleKey.isEmpty, !authorKey.isEmpty else { return nil }
+        let matches = ordered.filter {
+            Self.identityText($0.title) == titleKey && Self.identityText($0.author) == authorKey
+                && (identifiers.isEmpty || Self.isbnKeys($0.isbn).isEmpty)
+        }
+        // An ISBN-less record must not bridge two distinct editions.
+        let knownEditions = matches.filter { !Self.isbnKeys($0.isbn).isEmpty }
+        if let first = knownEditions.first,
+           knownEditions.contains(where: { Self.isbnKeys(first.isbn).isDisjoint(with: Self.isbnKeys($0.isbn)) }) {
+            return nil
+        }
+        return matches.first
+    }
+
+    /// Reparents both active and trashed entries before removing duplicate book containers.
+    func mergeDuplicateBooks() {
+        do {
+            let allBooks = try modelContext.fetch(FetchDescriptor<Book>())
+                .sorted { $0.id.uuidString < $1.id.uuidString }
+            let allEntries = try modelContext.fetch(FetchDescriptor<ReadingEntry>())
+            var survivors: [Book] = []
+            var replacements: [UUID: UUID] = [:]
+            // Known editions first, so an ambiguous manual record stays separate.
+            let known = allBooks.filter { !Self.isbnKeys($0.isbn).isEmpty }
+            let manual = allBooks.filter { Self.isbnKeys($0.isbn).isEmpty }
+            for book in known + manual {
+                guard let survivor = matchingBook(in: survivors, title: book.title, author: book.author, isbn: book.isbn) else {
+                    survivors.append(book)
+                    continue
+                }
+                for entry in allEntries where entry.bookID == book.id || entry.book?.id == book.id {
+                    entry.book = survivor
+                    entry.bookID = survivor.id
+                }
+                if survivor.isbn.isEmpty { survivor.isbn = book.isbn }
+                if survivor.coverURL.isEmpty { survivor.coverURL = book.coverURL }
+                if survivor.publisher.isEmpty { survivor.publisher = book.publisher }
+                survivor.isHiddenFromCalendar = survivor.isHiddenFromCalendar && book.isHiddenFromCalendar
+                if book.readingStatus == .reading || (survivor.readingStatus == .wantToRead && book.readingStatus == .finished) {
+                    survivor.readingStatus = book.readingStatus
+                }
+                replacements[book.id] = survivor.id
+                book.entries = []
+                modelContext.delete(book)
+            }
+            guard !replacements.isEmpty else { return }
+            try modelContext.save()
+            calendarBookOrders = calendarBookOrders.mapValues { ids in
+                var seen = Set<UUID>()
+                return ids.map { replacements[$0] ?? $0 }.filter { seen.insert($0).inserted }
+            }
+            saveCalendarBookOrders()
+            refresh()
+        } catch {
+            modelContext.rollback()
+            storageError = "중복 책을 합치지 못했어요. 기존 기록은 유지됩니다.\n\(error.localizedDescription)"
+        }
     }
 
     func addEntry(

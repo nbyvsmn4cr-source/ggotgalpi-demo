@@ -5,44 +5,34 @@ struct AddBookView: View {
     @EnvironmentObject private var store: DemoStore
     var onBookAdded: ((Book) -> Void)? = nil
     private let onEntrySaved: (() -> Void)?
+    private let initialEntryDate: Date?
     @State private var title = ""
     @State private var author = ""
     @State private var publisher = ""
     @State private var category: BookCategory = .literature
-    @State private var showsSearch = false
     @State private var selectedResult: CatalogBook?
     @State private var bookForNewEntry: Book?
-    @State private var showingInitialSearch: Bool
+    @State private var showsSearch = false
 
-    init(onEntrySaved: (() -> Void)? = nil, onBookAdded: ((Book) -> Void)? = nil, catalogBook: CatalogBook? = nil, startsWithSearch: Bool = false) {
+    init(onEntrySaved: (() -> Void)? = nil, onBookAdded: ((Book) -> Void)? = nil, catalogBook: CatalogBook? = nil, initialEntryDate: Date? = nil) {
+        self.initialEntryDate = initialEntryDate
         self.onEntrySaved = onEntrySaved
         self.onBookAdded = onBookAdded
         _title = State(initialValue: catalogBook?.title ?? "")
         _author = State(initialValue: catalogBook?.authors.joined(separator: ", ") ?? "")
         _publisher = State(initialValue: catalogBook?.publisher ?? "")
         _selectedResult = State(initialValue: catalogBook)
-        _showingInitialSearch = State(initialValue: startsWithSearch && catalogBook == nil)
     }
 
     var body: some View {
         Group {
             if let bookForNewEntry {
-                AddReadingEntryView(book: bookForNewEntry, editingEntry: nil, onSaved: onEntrySaved)
-            } else if showingInitialSearch {
-                CatalogSearchView(dismissOnSelect: false, focusesSearchOnAppear: true, onManualEntry: {
-                    showingInitialSearch = false
-                }) { result in
-                    title = result.title
-                    author = result.authors.joined(separator: ", ")
-                    publisher = result.publisher
-                    selectedResult = result
-                    showingInitialSearch = false
-                }
+                AddReadingEntryView(book: bookForNewEntry, editingEntry: nil, initialDate: initialEntryDate ?? Date(), onSaved: onEntrySaved)
             } else {
                 bookForm
             }
         }
-        .presentationDetents(bookForNewEntry == nil && !showingInitialSearch ? [.medium, .large] : [.large])
+        .presentationDetents(bookForNewEntry == nil ? [.medium, .large] : [.large])
         .paperBackground()
     }
 
@@ -68,7 +58,7 @@ struct AddBookView: View {
                         }
                     }
                 } footer: {
-                    Text("검색하지 않고 직접 입력해도 돼요.")
+                    Text("검색한 책 정보를 가져오거나 직접 입력할 수 있어요.")
                 }
                 Section {
                     TextField("책 제목", text: $title)
@@ -102,7 +92,7 @@ struct AddBookView: View {
                             // Date-specific calendar flows own their selected reading date.
                             onBookAdded(book)
                             dismiss()
-                        } else if selectedResult != nil {
+                        } else if selectedResult != nil || initialEntryDate != nil {
                             // Replace this sheet's content instead of racing dismissal
                             // against presentation of a second sheet.
                             bookForNewEntry = book
@@ -115,12 +105,12 @@ struct AddBookView: View {
             }
         }
         .sheet(isPresented: $showsSearch) {
-            CatalogSearchView { result in
+            ContextualBookSearchView(title: "책 정보 찾기", initialQuery: title, onCatalogSelected: { result in
                 title = result.title
                 author = result.authors.joined(separator: ", ")
                 publisher = result.publisher
                 selectedResult = result
-            }
+            })
         }
     }
 }
@@ -161,143 +151,6 @@ struct CatalogCover: View {
     }
 }
 
-private struct CatalogSearchView: View {
-    @Environment(\.dismiss) private var dismiss
-    var dismissOnSelect = true
-    var focusesSearchOnAppear = false
-    var onManualEntry: (() -> Void)? = nil
-    let onSelect: (CatalogBook) -> Void
-    @FocusState private var searchFocused: Bool
-    @State private var query = ""
-    @State private var submittedQuery = ""
-    @State private var results: [CatalogBook] = []
-    @State private var isLoading = false
-    @State private var hasSearched = false
-    @State private var isEnd = true
-    @State private var page = 0
-    @State private var errorMessage: String?
-    @State private var searchTask: Task<Void, Never>?
-    @State private var requestID = UUID()
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        TextField("책 제목 또는 ISBN", text: $query)
-                            .focused($searchFocused)
-                            .submitLabel(.search)
-                            .onSubmit { startSearch() }
-                            .autocorrectionDisabled()
-                        Button("검색") { startSearch() }
-                            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                } footer: {
-                    Text("검색어는 Cloudflare와 카카오에 전달돼요. 감상문은 전송하지 않아요.")
-                }
-                if let errorMessage {
-                    Section { Text(errorMessage).foregroundStyle(.secondary) }
-                }
-                if hasSearched && results.isEmpty && !isLoading && errorMessage == nil {
-                    Text("검색 결과가 없어요. 다른 제목이나 ISBN으로 검색하거나 직접 입력해 주세요.")
-                }
-                ForEach(results.indices, id: \.self) { index in
-                    let book = results[index]
-                    VStack(alignment: .leading, spacing: 8) {
-                        Button {
-                            onSelect(book)
-                            if dismissOnSelect { dismiss() }
-                        } label: {
-                            HStack(spacing: 12) {
-                                CatalogCover(url: book.coverURL)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(book.title).font(.doveMayo(.headline, bold: true))
-                                    Text(book.authors.joined(separator: ", ")).font(.doveMayo(.subheadline))
-                                    Text(book.publisher).font(.doveMayo(.caption)).foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if let url = book.detailURL {
-                            Link("Daum 책 정보 보기", destination: url).font(.doveMayo(.caption))
-                        }
-                    }
-                }
-                if isLoading {
-                    ProgressView("책을 찾고 있어요")
-                } else if !isEnd {
-                    Button("더 보기") { load(query: submittedQuery, page: page + 1) }
-                }
-                Section { Text("도서 검색 제공: Kakao · Daum").font(.doveMayo(.caption)).foregroundStyle(.secondary) }
-            }
-            .scrollContentBackground(.hidden)
-            .background(GgotgalpiTheme.paper)
-            .navigationTitle("책 검색")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } }
-                if let onManualEntry {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("직접 입력") { onManualEntry() }
-                    }
-                }
-            }
-        }
-        .task {
-            if focusesSearchOnAppear { searchFocused = true }
-        }
-        .onDisappear { searchTask?.cancel(); requestID = UUID() }
-    }
-
-    private func startSearch() {
-        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        submittedQuery = value
-        results = []
-        page = 0
-        isEnd = true
-        load(query: value, page: 1)
-    }
-
-    private func load(query: String, page requestedPage: Int) {
-        searchTask?.cancel()
-        let token = UUID()
-        requestID = token
-        isLoading = true
-        errorMessage = nil
-        searchTask = Task { @MainActor in
-            defer { if requestID == token { isLoading = false } }
-            do {
-                var components = URLComponents(string: "https://ggotgalpi-book-search.rinarocketpunch.workers.dev/books")!
-                components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "page", value: String(requestedPage))]
-                var request = URLRequest(url: components.url!)
-                request.timeoutInterval = 15
-                request.cachePolicy = .reloadIgnoringLocalCacheData
-                let (data, response) = try await URLSession.shared.data(for: request)
-                try Task.checkCancellation()
-                guard requestID == token else { return }
-                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-                guard http.statusCode == 200 else {
-                    errorMessage = http.statusCode == 429
-                        ? "검색 요청이 많아요. 잠시 후 다시 시도해 주세요. 직접 입력은 계속 이용할 수 있어요."
-                        : "지금은 책 검색을 이용할 수 없어요. 잠시 후 다시 검색하거나 직접 입력해 주세요."
-                    return
-                }
-                let result = try JSONDecoder().decode(CatalogPage.self, from: data)
-                results.append(contentsOf: result.books)
-                page = requestedPage
-                isEnd = result.isEnd || requestedPage >= 50
-                hasSearched = true
-            } catch {
-                guard !Task.isCancelled, requestID == token else { return }
-                errorMessage = "책 정보를 가져오지 못했어요. 인터넷 연결을 확인한 뒤 다시 검색하거나 직접 입력해 주세요."
-            }
-        }
-    }
-}
 
 struct EditBookView: View {
     @Environment(\.dismiss) private var dismiss
@@ -312,11 +165,12 @@ struct EditBookView: View {
     @State private var showsSearch = false
     @State private var selectedResult: CatalogBook?
 
-    init(book: Book) {
+    init(book: Book, catalogBook: CatalogBook? = nil) {
         self.book = book
-        _title = State(initialValue: book.title)
-        _author = State(initialValue: book.author)
-        _publisher = State(initialValue: book.publisher)
+        _selectedResult = State(initialValue: catalogBook)
+        _title = State(initialValue: catalogBook?.title ?? book.title)
+        _author = State(initialValue: catalogBook?.authors.joined(separator: ", ") ?? book.author)
+        _publisher = State(initialValue: catalogBook?.publisher ?? book.publisher)
         _category = State(initialValue: book.category)
         _readingStatus = State(initialValue: book.readingStatus)
         _isHiddenFromCalendar = State(initialValue: book.isHiddenFromCalendar)
@@ -389,12 +243,12 @@ struct EditBookView: View {
             }
         }
         .sheet(isPresented: $showsSearch) {
-            CatalogSearchView { result in
+            ContextualBookSearchView(title: "책 정보 바꾸기", initialQuery: title, onCatalogSelected: { result in
                 title = result.title
                 author = result.authors.joined(separator: ", ")
                 publisher = result.publisher
                 selectedResult = result
-            }
+            })
         }
         .presentationDetents([.large])
         .paperBackground()

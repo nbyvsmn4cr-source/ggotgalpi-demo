@@ -23,6 +23,8 @@ struct ContentView: View {
     }
 
     @State private var selectedTab: Tab = .calendar
+    @AppStorage("ggotgalpi.onboarding.completed.v1") private var hasSeenGuide = false
+    @State private var showingFirstLaunchGuide = false
     @State private var isShowingSettings = false
     @State private var isShowingSettingsDetail = false
     @State private var interactiveOffset: CGFloat = 0
@@ -104,12 +106,15 @@ struct ContentView: View {
                 .overlay(alignment: selectedTab == .calendar ? .trailing : .leading) {
                     if !isShowingSettings {
                         edgeSwipeArea(pageWidth: pageWidth)
+                            // Reserve the top controls for taps, not page-swiping gestures.
+                            .padding(.top, proxy.safeAreaInsets.top + 96)
                     }
                 }
             }
         }
         // 화면 배경은 기기 가장자리까지 확장하되, 키보드가 나타날 때는 안전 영역을 존중합니다.
-        .ignoresSafeArea(.container)
+        // Folded displays can reserve a horizontal system area. Never place controls there.
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .font(.doveMayo(.body))
         .overlay(alignment: .bottom) {
             if !isShowingSettingsDetail {
@@ -120,6 +125,15 @@ struct ContentView: View {
             }
         }
         .tint(GgotgalpiTheme.accent)
+        .task {
+            if !hasSeenGuide { showingFirstLaunchGuide = true }
+        }
+        .fullScreenCover(isPresented: $showingFirstLaunchGuide) {
+            GettingStartedGuide {
+                hasSeenGuide = true
+                showingFirstLaunchGuide = false
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             store.refresh()
@@ -414,6 +428,7 @@ struct SettingsView: View {
     @AppStorage(DemoStore.trashRetentionDaysKey) private var trashRetentionDays = DemoStore.defaultTrashRetentionDays
     @State private var isShowingTrash = false
     @State private var showingTrashRetentionOptions = false
+    @State private var showingGuide = false
 
     var body: some View {
         NavigationStack {
@@ -462,6 +477,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        showingGuide = true
+                    } label: {
+                        HStack {
+                            Label("사용 가이드 다시 보기", systemImage: "book.pages")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.doveMayo(.caption, bold: true))
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     LabeledContent("버전", value: "0.1")
                 } header: {
                     Text("앱 정보")
@@ -475,8 +504,6 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(GgotgalpiTheme.surface)
             .safeAreaPadding(.bottom, 64)
-            .frame(width: panelWidth)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .navigationDestination(isPresented: $isShowingTrash) {
                 TrashView()
             }
@@ -500,7 +527,13 @@ struct SettingsView: View {
                 }
             }
         }
+        .frame(width: panelWidth)
+        .clipped()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         .background(Color.clear)
+        .fullScreenCover(isPresented: $showingGuide) {
+            GettingStartedGuide { showingGuide = false }
+        }
     }
 
     private func openTrash() {
@@ -513,5 +546,147 @@ struct SettingsView: View {
         withTransaction(transaction) {
             isShowingTrash = true
         }
+    }
+}
+
+private struct GettingStartedGuide: View {
+    let onFinish: () -> Void
+    @State private var stepIndex = 0
+
+    private struct Step {
+        let screenshot: String
+        let title: String
+        let message: String
+        // Coordinates are normalized against the original 1206 × 2622 screenshots.
+        let target: CGRect
+    }
+
+    private let steps: [Step] = [
+        Step(screenshot: "GuideCalendar", title: "기록할 날짜를 눌러요",
+             message: "읽은 날을 선택하고 +를 누르면 그 날짜의 화면에서 책을 검색하고 감상문을 쓸 수 있어요. 이미 기록한 날에도 추가할 수 있어요.",
+             target: CGRect(x: 0.06, y: 0.24, width: 0.88, height: 0.38)),
+        Step(screenshot: "GuideCalendar", title: "아래에서 화면을 바꿔요",
+             message: "달력은 날짜별 기록, 책장은 책별 기록을 보여줘요. 설정도 여기서 열어요.",
+             target: CGRect(x: 0.23, y: 0.92, width: 0.53, height: 0.055)),
+        Step(screenshot: "GuideSearch", title: "책과 감상문을 함께 검색해요",
+             message: "상단 검색창에 제목·작가·감상문 내용을 입력하세요. 새 책은 키보드의 ‘검색’을 눌러 온라인에서 찾아요.",
+             target: CGRect(x: 0.04, y: 0.07, width: 0.92, height: 0.05)),
+        Step(screenshot: "GuideSearch", title: "검색 없이 직접 등록할 수도 있어요",
+             message: "‘새 책 직접 등록’에서 책 정보를 적으세요. 온라인 검색어만 Cloudflare·카카오에 전달되며 감상문은 보내지 않아요.",
+             target: CGRect(x: 0.05, y: 0.27, width: 0.65, height: 0.04)),
+        Step(screenshot: "GuideEntry", title: "날짜와 읽은 시간을 정해요",
+             message: "날짜를 누르면 기록할 날을 바꿀 수 있어요. 설정에서 시간 기록을 켜면 시작·종료 시간도 입력해요.",
+             target: CGRect(x: 0.05, y: 0.20, width: 0.9, height: 0.08)),
+        Step(screenshot: "GuideEntry", title: "별점은 반점씩 남겨요",
+             message: "별의 왼쪽은 0.5점, 오른쪽은 1점 단위예요. 같은 점수를 다시 누르면 해제돼요.",
+             target: CGRect(x: 0.05, y: 0.40, width: 0.9, height: 0.09)),
+        Step(screenshot: "GuideEntry", title: "오늘의 감상을 적어요",
+             message: "사진은 ‘섬진강 아이들’의 감상문이에요. 짧은 생각도 좋아요. 아래에는 마음에 드는 문장도 남길 수 있고, 다 썼다면 오른쪽 위의 기록·저장을 눌러요.",
+             target: CGRect(x: 0.05, y: 0.71, width: 0.9, height: 0.19)),
+        Step(screenshot: "GuideSettings", title: "읽은 시간 기록을 켜고 꺼요",
+             message: "필요할 때만 켜세요. 감상문 작성 화면의 날짜를 눌러 시간 팝업을 열 수 있어요.",
+             target: CGRect(x: 0.26, y: 0.24, width: 0.68, height: 0.05)),
+        Step(screenshot: "GuideSettings", title: "삭제한 감상문은 휴지통에 있어요",
+             message: "보관 중에는 복원할 수 있어요. 7·14·30일 중 고른 기간이 지나면 앱 이용 시 영구 삭제돼요.",
+             target: CGRect(x: 0.26, y: 0.37, width: 0.68, height: 0.1)),
+        Step(screenshot: "GuideSettings", title: "언제든 다시 볼 수 있어요",
+             message: "사용법이 생각나지 않으면 설정의 ‘사용 가이드 다시 보기’를 눌러주세요.",
+             target: CGRect(x: 0.26, y: 0.55, width: 0.68, height: 0.055))
+    ]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("꽃갈피 사용 가이드")
+                    .font(.doveMayo(.headline, bold: true))
+                Spacer()
+                Button("건너뛰기", action: onFinish)
+                    .frame(minHeight: 44)
+            }
+            .padding(.horizontal, 20)
+
+            GeometryReader { proxy in
+                let aspect = CGFloat(1206) / 2622
+                let width = min(proxy.size.width, proxy.size.height * aspect)
+                let height = width / aspect
+                let step = steps[stepIndex]
+                let target = CGRect(x: step.target.minX * width, y: step.target.minY * height,
+                                    width: step.target.width * width, height: step.target.height * height)
+                ZStack {
+                    Image(step.screenshot)
+                        .resizable()
+                        .scaledToFit()
+                        .accessibilityHidden(true)
+
+                    Path { path in
+                        path.addRect(CGRect(x: 0, y: 0, width: width, height: height))
+                        path.addRoundedRect(in: target, cornerSize: CGSize(width: 10, height: 10))
+                    }
+                    .fill(.black.opacity(0.60), style: FillStyle(eoFill: true))
+                    .accessibilityHidden(true)
+
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.white, lineWidth: 2)
+                        .frame(width: target.width, height: target.height)
+                        .position(x: target.midX, y: target.midY)
+                        .accessibilityHidden(true)
+
+                    // Keep the explanation over the photo, on the opposite side of the highlighted control.
+                    VStack {
+                        if step.target.midY < 0.5 { Spacer(minLength: 0) }
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(step.title, systemImage: step.target.midY < 0.5 ? "arrow.up" : "arrow.down")
+                                .font(.doveMayo(.headline, bold: true))
+                                .accessibilityAddTraits(.isHeader)
+                            ScrollView {
+                                Text(step.message)
+                                    .font(.doveMayo(.body))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxHeight: height * 0.23)
+                        }
+                        .padding(14)
+                        .foregroundStyle(GgotgalpiTheme.ink)
+                        .background(GgotgalpiTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                        .accessibilityElement(children: .combine)
+                        .id(stepIndex)
+                        if step.target.midY >= 0.5 { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, height * 0.10)
+                    .padding(.bottom, height * 0.10)
+                }
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            HStack(spacing: 16) {
+                Button("이전") { stepIndex -= 1 }
+                    .disabled(stepIndex == 0)
+                    .frame(minWidth: 48, minHeight: 48)
+                Text("\(stepIndex + 1) / \(steps.count)")
+                    .font(.doveMayo(.caption))
+                    .accessibilityLabel("총 \(steps.count)단계 중 \(stepIndex + 1)단계")
+                Button(stepIndex == steps.count - 1 ? "시작하기" : "다음") {
+                    if stepIndex == steps.count - 1 { onFinish() }
+                    else { stepIndex += 1 }
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .foregroundStyle(GgotgalpiTheme.paper)
+                .background(GgotgalpiTheme.ink, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .frame(maxWidth: 520)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+        .font(.doveMayo(.body))
+        .foregroundStyle(GgotgalpiTheme.ink)
+        .tint(GgotgalpiTheme.ink)
+        .background(GgotgalpiTheme.paper.ignoresSafeArea())
+        .interactiveDismissDisabled()
     }
 }

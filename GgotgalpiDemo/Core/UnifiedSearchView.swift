@@ -261,6 +261,8 @@ struct InlineUnifiedSearchView: View {
     @EnvironmentObject private var store: DemoStore
     @Binding var query: String
     var catalogQuery: String
+    var initialEntryDate: Date?
+    @State private var didSaveEntry = false
     private let onEntrySaved: () -> Void
     private let bookMatchesFilter: (Book) -> Bool
     @State private var selectedBook: Book?
@@ -270,11 +272,13 @@ struct InlineUnifiedSearchView: View {
     init(
         query: Binding<String>,
         catalogQuery: String = "",
+        initialEntryDate: Date? = nil,
         onEntrySaved: @escaping () -> Void = {},
         bookMatchesFilter: @escaping (Book) -> Bool = { _ in true }
     ) {
         _query = query
         self.catalogQuery = catalogQuery
+        self.initialEntryDate = initialEntryDate
         self.onEntrySaved = onEntrySaved
         self.bookMatchesFilter = bookMatchesFilter
     }
@@ -283,12 +287,17 @@ struct InlineUnifiedSearchView: View {
         UnifiedSearchSnapshot(
             query: debouncedQuery,
             store: store,
-            bookMatchesFilter: bookMatchesFilter
+            bookMatchesFilter: initialEntryDate == nil ? bookMatchesFilter : { _ in true }
         )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.section) {
+            if let initialEntryDate {
+                Text(initialEntryDate.formatted(date: .abbreviated, time: .omitted) + "에 기록할 책을 선택해 주세요")
+                    .font(.doveMayo(.subheadline))
+                    .foregroundStyle(GgotgalpiTheme.secondaryInk)
+            }
             if !snapshot.hasSearchTerm {
                 VStack(alignment: .leading, spacing: GgotgalpiTheme.Spacing.control) {
                     SearchGuideRow(
@@ -349,7 +358,7 @@ struct InlineUnifiedSearchView: View {
                 }
             }
             if !catalogQuery.isEmpty {
-                UnifiedCatalogResults(query: catalogQuery, onEntrySaved: onEntrySaved).id(catalogQuery)
+                UnifiedCatalogResults(query: catalogQuery, onEntrySaved: onEntrySaved, initialEntryDate: initialEntryDate).id(catalogQuery)
             } else {
                 Text("키보드의 ‘검색’을 누르면 온라인 도서도 찾아요. 검색어는 Cloudflare·카카오로 전달돼요.")
                     .font(.doveMayo(.caption))
@@ -357,11 +366,15 @@ struct InlineUnifiedSearchView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .sheet(item: $selectedBook) { book in
-            BookDetailView(book: book)
+        .sheet(item: $selectedBook, onDismiss: finishSavedEntry) { book in
+            if let initialEntryDate {
+                AddReadingEntryView(book: book, editingEntry: nil, initialDate: initialEntryDate, onSaved: { didSaveEntry = true })
+            } else {
+                BookDetailView(book: book)
+            }
         }
-        .sheet(isPresented: $showingAddBook) {
-            AddBookView()
+        .sheet(isPresented: $showingAddBook, onDismiss: finishSavedEntry) {
+            AddBookView(onEntrySaved: { didSaveEntry = true }, initialEntryDate: initialEntryDate ?? Date())
         }
         .task(id: query) {
             await updateDebouncedQuery(for: query)
@@ -376,6 +389,12 @@ struct InlineUnifiedSearchView: View {
                 .foregroundStyle(GgotgalpiTheme.ink)
         }
         .buttonStyle(.plain)
+    }
+
+    private func finishSavedEntry() {
+        guard didSaveEntry else { return }
+        didSaveEntry = false
+        onEntrySaved()
     }
 
     @ViewBuilder
@@ -404,11 +423,82 @@ struct InlineUnifiedSearchView: View {
     }
 }
 
+/// The same search content is hosted locally by date-entry and metadata-editing flows.
+struct ContextualBookSearchView: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    var initialEntryDate: Date? = nil
+    var initialQuery: String = ""
+    var onCatalogSelected: ((CatalogBook) -> Void)? = nil
+    @State private var query = ""
+    @State private var submittedQuery = ""
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                        TextField("책 제목, 작가 또는 ISBN", text: $query)
+                            .focused($searchFocused)
+                            .submitLabel(.search)
+                            .onSubmit(submit)
+                        Button("검색", action: submit)
+                            .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    .padding(12)
+                    .background(GgotgalpiTheme.surface, in: Capsule())
+                    if let onCatalogSelected {
+                        Text("검색한 책을 선택하면 작성 중인 책 정보에 입력돼요. 저장 전에는 기존 정보가 바뀌지 않아요.")
+                            .font(.doveMayo(.subheadline))
+                        if !submittedQuery.isEmpty {
+                            UnifiedCatalogResults(query: submittedQuery, onEntrySaved: {}, onCatalogSelected: { book in
+                                onCatalogSelected(book)
+                                dismiss()
+                            }).id(submittedQuery)
+                        }
+                        Text("‘검색’을 누르면 검색어가 Cloudflare·카카오로 전달돼요.")
+                            .font(.doveMayo(.caption)).foregroundStyle(.secondary)
+                    } else {
+                        InlineUnifiedSearchView(query: $query, catalogQuery: submittedQuery,
+                                                initialEntryDate: initialEntryDate,
+                                                onEntrySaved: { dismiss() })
+                    }
+                }
+                .padding(GgotgalpiTheme.Spacing.screen)
+            }
+            .background(GgotgalpiTheme.paper)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .onAppear {
+            if query.isEmpty { query = initialQuery }
+            searchFocused = true
+        }
+    }
+
+    private func submit() {
+        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        submittedQuery = value
+        searchFocused = false
+    }
+}
+
 /// Explicitly submitted online searches stay separate from private journal filtering.
 private struct UnifiedCatalogResults: View {
     @EnvironmentObject private var store: DemoStore
     let query: String
     let onEntrySaved: () -> Void
+    var initialEntryDate: Date? = nil
+    var onCatalogSelected: ((CatalogBook) -> Void)? = nil
     @State private var didSaveEntry = false
     @State private var books: [CatalogBook] = []
     @State private var page = 1
@@ -418,14 +508,17 @@ private struct UnifiedCatalogResults: View {
     @State private var selection: CatalogBook?
     @State private var existingBook: Book?
     @State private var attempt = 0
+    @State private var loadedPages: Set<Int> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("온라인 도서").font(.doveMayo(.headline, bold: true))
+            Text("온라인 도서 · \(query)").font(.doveMayo(.headline, bold: true))
             ForEach(books) { book in
                 VStack(alignment: .leading, spacing: 6) {
                     Button {
-                        if let registered = registeredBook(for: book) {
+                        if let onCatalogSelected {
+                            onCatalogSelected(book)
+                        } else if let registered = registeredBook(for: book) {
                             existingBook = registered
                         } else {
                             selection = book
@@ -437,7 +530,7 @@ private struct UnifiedCatalogResults: View {
                                 Text(book.title).font(.doveMayo(.headline, bold: true))
                                 Text(book.authors.joined(separator: ", ")).font(.doveMayo(.subheadline))
                                 Text(book.publisher).font(.doveMayo(.caption))
-                                Text(registeredBook(for: book) == nil ? "내 책장에 추가" : "등록된 책 보기")
+                                Text(onCatalogSelected != nil ? "이 책 정보 선택" : (registeredBook(for: book) == nil ? "내 책장에 추가" : (initialEntryDate == nil ? "등록된 책 보기" : "이 책에 감상 기록 추가")))
                                     .font(.doveMayo(.caption)).foregroundStyle(.secondary)
                             }
                             Spacer(minLength: 0)
@@ -469,28 +562,37 @@ private struct UnifiedCatalogResults: View {
             didSaveEntry = false
             onEntrySaved()
         }) { book in
-            AddBookView(onEntrySaved: { didSaveEntry = true }, catalogBook: book)
+            AddBookView(onEntrySaved: { didSaveEntry = true }, catalogBook: book, initialEntryDate: initialEntryDate)
         }
-        .sheet(item: $existingBook) { book in BookDetailView(book: book) }
+        .sheet(item: $existingBook, onDismiss: {
+            guard didSaveEntry else { return }
+            didSaveEntry = false
+            onEntrySaved()
+        }) { book in
+            if let initialEntryDate {
+                AddReadingEntryView(book: book, editingEntry: nil, initialDate: initialEntryDate, onSaved: { didSaveEntry = true })
+            } else {
+                BookDetailView(book: book)
+            }
+        }
         .task(id: "\(page)-\(attempt)") { await load() }
     }
 
     private func registeredBook(for book: CatalogBook) -> Book? {
-        let identifiers = Set(book.isbn.split(whereSeparator: { $0.isWhitespace }).map(String.init))
-        guard !identifiers.isEmpty else { return nil }
-        return store.books.first {
-            !identifiers.isDisjoint(with: $0.isbn.split(whereSeparator: { $0.isWhitespace }).map(String.init))
-        }
+        store.matchingBook(title: book.title, author: book.authors.joined(separator: ", "), isbn: book.isbn)
     }
 
     @MainActor
     private func load() async {
+        // Presenting/dismissing a book sheet must not fetch an already loaded page again.
+        guard !loadedPages.contains(page) else { return }
+        let requestedPage = page
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
             var components = URLComponents(string: "https://ggotgalpi-book-search.rinarocketpunch.workers.dev/books")!
-            components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "page", value: String(page))]
+            components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "page", value: String(requestedPage))]
             var request = URLRequest(url: components.url!)
             request.timeoutInterval = 15
             request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -506,7 +608,8 @@ private struct UnifiedCatalogResults: View {
             let result = try JSONDecoder().decode(CatalogPage.self, from: data)
             var seen = Set(books.map(\.id))
             books.append(contentsOf: result.books.filter { seen.insert($0.id).inserted })
-            isEnd = result.isEnd || page >= 50
+            loadedPages.insert(requestedPage)
+            isEnd = result.isEnd || requestedPage >= 50
         } catch {
             guard !Task.isCancelled else { return }
             errorMessage = "온라인 도서를 가져오지 못했어요. 인터넷 연결을 확인해 주세요. 기존 기록은 계속 검색할 수 있어요."

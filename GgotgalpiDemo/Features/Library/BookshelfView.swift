@@ -7,7 +7,6 @@ struct BookshelfView: View {
     @State private var selectedReadingStatus: ReadingStatus = .all
     @State private var selectedCategory: BookCategory = .all
     @State private var isShowingFilters = false
-    @State private var showingAddBook = false
     @State private var selectedBook: Book?
     @State private var isSearchExpanded = false
     @State private var searchQuery = ""
@@ -194,6 +193,9 @@ struct BookshelfView: View {
                         proxy.scrollTo("bookshelf-scroll-top", anchor: .top)
                     }
                 }
+                .onChange(of: isSearchExpanded) { _, expanded in
+                    if expanded { proxy.scrollTo("bookshelf-scroll-top", anchor: .top) }
+                }
                 .scrollIndicators(.hidden)
                 // 툴바 슬롯의 고정 폭을 쓰지 않고, 화면의 좌우 여백 안에서 검색창을 직접 배치합니다.
                 .safeAreaPadding(.top, 40)
@@ -209,29 +211,8 @@ struct BookshelfView: View {
                     )
                     .presentationDetents([.medium])
                 }
-                .sheet(isPresented: $showingAddBook) {
-                    AddBookView()
-                }
                 .sheet(item: $selectedBook) { book in
                     BookDetailView(book: book)
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Button {
-                        closeSearch()
-                        showingAddBook = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.doveMayo(.title3, bold: true))
-                            .foregroundStyle(GgotgalpiTheme.paper)
-                            .frame(width: 52, height: 52)
-                            .background(GgotgalpiTheme.accent)
-                            .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.14), radius: 8, y: 4)
-                    }
-                    .accessibilityLabel("새 책 등록")
-                    // 하단 독의 오른쪽 빈 영역 바로 위에 떠 있도록 여백을 둡니다.
-                    .padding(.trailing, GgotgalpiTheme.Spacing.screen)
-                    .padding(.bottom, 76)
                 }
             }
         }
@@ -251,7 +232,7 @@ struct BookshelfView: View {
 
                     bookshelfActionIcons
                 }
-                .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
             } else {
                 HStack(spacing: GgotgalpiTheme.Spacing.compact) {
                     if hasActiveFilter {
@@ -269,7 +250,7 @@ struct BookshelfView: View {
 
                     bookshelfActionIcons
                 }
-                .frame(height: 40)
+                .frame(height: 44)
             }
         }
         .foregroundStyle(GgotgalpiTheme.ink)
@@ -285,6 +266,7 @@ struct BookshelfView: View {
             bookshelfFilterButton
             bookshelfSearchButton
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var bookshelfTrashButton: some View {
@@ -294,7 +276,8 @@ struct BookshelfView: View {
             Image(systemName: "trash")
                 .font(.doveMayo(.body))
                 .foregroundStyle(GgotgalpiTheme.ink)
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .simultaneousGesture(TapGesture().onEnded { closeSearch() })
@@ -309,7 +292,8 @@ struct BookshelfView: View {
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.doveMayo(.body))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("책장 필터")
@@ -324,7 +308,8 @@ struct BookshelfView: View {
             }
         } label: {
             Image(systemName: "magnifyingglass")
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isSearchExpanded ? "검색 닫기" : "통합 검색")
@@ -349,7 +334,7 @@ struct BookshelfView: View {
                     catalogQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
                     isSearchFieldFocused = false
                 }
-                .onChange(of: searchQuery) { _, _ in catalogQuery = "" }
+                // Keep the last submitted results while editing; typing never requests the API.
                 .textFieldStyle(.plain)
                 .font(.doveMayo(.subheadline))
                 .focused($isSearchFieldFocused)
@@ -371,6 +356,7 @@ struct BookshelfView: View {
     }
 
     private func closeSearch() {
+        catalogQuery = ""
         isSearchFieldFocused = false
         withAnimation(.easeInOut(duration: 0.24)) {
             isSearchExpanded = false

@@ -107,7 +107,7 @@ struct CalendarView: View {
                                 onEntrySaved: closeSearch,
                                 bookMatchesFilter: matchesCalendarFilters
                             )
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                                .transition(.opacity)
                         }
 
                         if !hasSearchTerm {
@@ -145,13 +145,15 @@ struct CalendarView: View {
                             )
                         }
                     }
-                    .id("calendar-scroll-top")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, GgotgalpiTheme.Spacing.screen)
                 // 기존 내비게이션 바가 차지하던 높이를 유지해 상단 액션과 달력이 겹치지 않게 합니다.
                 .padding(.top, GgotgalpiTheme.Spacing.control + GgotgalpiTheme.Spacing.largeSection + GgotgalpiTheme.Spacing.content + GgotgalpiTheme.Spacing.compact)
                 // 하단 플로팅 독에 마지막 요약 항목이 가려지지 않도록 스크롤 여유를 둡니다.
                     .padding(.bottom, GgotgalpiTheme.Spacing.largeSection * 3)
+                    // Include the search-bar clearance in the scroll target, otherwise
+                    // scrollTo aligns the first guide row underneath the fixed search bar.
+                    .id("calendar-scroll-top")
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -162,6 +164,9 @@ struct CalendarView: View {
                     withAnimation(.easeOut(duration: 0.3)) {
                         proxy.scrollTo("calendar-scroll-top", anchor: .top)
                     }
+                }
+                .onChange(of: isSearchExpanded) { _, expanded in
+                    if expanded { proxy.scrollTo("calendar-scroll-top", anchor: .top) }
                 }
             }
             .scrollIndicators(.hidden)
@@ -230,7 +235,7 @@ struct CalendarView: View {
 
                     calendarActionIcons
                 }
-                .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
             } else {
                 HStack(spacing: GgotgalpiTheme.Spacing.compact) {
                     if hasActiveFilter {
@@ -249,7 +254,7 @@ struct CalendarView: View {
 
                     calendarActionIcons
                 }
-                .frame(height: 40)
+                .frame(height: 44)
             }
         }
         .foregroundStyle(GgotgalpiTheme.ink)
@@ -262,6 +267,7 @@ struct CalendarView: View {
             filterButton
             searchButton
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var filterButton: some View {
@@ -271,7 +277,8 @@ struct CalendarView: View {
         } label: {
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.doveMayo(.body))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("달력 필터")
@@ -287,7 +294,8 @@ struct CalendarView: View {
         } label: {
             Image(systemName: "magnifyingglass")
                 .font(.doveMayo(.body))
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isSearchExpanded ? "검색 닫기" : "통합 검색")
@@ -312,7 +320,7 @@ struct CalendarView: View {
                     catalogQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
                     isSearchFieldFocused = false
                 }
-                .onChange(of: searchQuery) { _, _ in catalogQuery = "" }
+                // Keep the last submitted results while editing; typing never requests the API.
                 .textFieldStyle(.plain)
                 .font(.doveMayo(.subheadline))
                 .focused($isSearchFieldFocused)
@@ -334,6 +342,7 @@ struct CalendarView: View {
     }
 
     private func closeSearch() {
+        catalogQuery = ""
         isSearchFieldFocused = false
         withAnimation(.easeInOut(duration: 0.24)) {
             isSearchExpanded = false
@@ -654,9 +663,7 @@ private struct CalendarDayEntriesSheet: View {
     @State private var editMode: EditMode = .inactive
     @State private var editingEntry: CalendarDayEntryEditRequest?
     @State private var editingBook: Book?
-    @State private var showingAddBook = false
-    @State private var newlyAddedBook: Book?
-    @State private var bookForNewEntry: Book?
+    @State private var showingBookSearch = false
 
     let date: Date
     let entriesForDate: () -> [ReadingEntry]
@@ -758,25 +765,16 @@ private struct CalendarDayEntriesSheet: View {
             .sheet(item: $editingBook) { book in
                 EditBookView(book: book)
             }
-            .sheet(isPresented: $showingAddBook, onDismiss: {
-                guard let newlyAddedBook else { return }
-                self.newlyAddedBook = nil
-                bookForNewEntry = newlyAddedBook
-            }) {
-                AddBookView(onBookAdded: { book in
-                    newlyAddedBook = book
-                }, startsWithSearch: true)
-            }
-            .sheet(item: $bookForNewEntry) { book in
-                AddReadingEntryView(book: book, editingEntry: nil, initialDate: date)
+            .sheet(isPresented: $showingBookSearch) {
+                ContextualBookSearchView(title: "감상 기록할 책 찾기", initialEntryDate: date)
             }
             .onChange(of: entries.map(\.id)) {
                 appendNewBooksForRecordedEntries()
             }
             .overlay(alignment: .bottomTrailing) {
-                if entries.isEmpty {
                     Button {
-                        showingAddBook = true
+                        editMode = .inactive
+                        showingBookSearch = true
                     } label: {
                         Image(systemName: "plus")
                             .font(.doveMayo(.title3, bold: true))
@@ -786,10 +784,9 @@ private struct CalendarDayEntriesSheet: View {
                             .clipShape(Circle())
                             .shadow(color: .black.opacity(0.14), radius: 8, y: 4)
                     }
-                    .accessibilityLabel("새 책 등록")
+                    .accessibilityLabel("이 날짜에 감상 기록 추가")
                     .padding(.trailing, GgotgalpiTheme.Spacing.screen)
                     .padding(.bottom, GgotgalpiTheme.Spacing.content)
-                }
             }
         }
         .paperBackground()
